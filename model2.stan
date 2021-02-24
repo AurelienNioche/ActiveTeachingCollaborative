@@ -31,9 +31,9 @@ model {
   vector[n] p;
   // vector[n] p_bn;
   
-  sg_w ~ normal(0, 1);
-  sg_u ~ normal(0, 1);
-  sg_theta ~ normal(0, 1);
+  sg_w ~ inv_gamma(1, 1);
+  sg_u ~ inv_gamma(1, 1);
+  sg_theta ~ inv_gamma(1, 1);
   mu ~ normal(0, 10);
   
   U ~ normal(0, sg_u);
