@@ -65,10 +65,10 @@ static const std::vector<string> locations_array__ = {" (found before start of p
                                                       " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 11, column 2 to column 10)",
                                                       " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 13, column 2 to column 14)",
                                                       " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 14, column 2 to column 14)",
-                                                      " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 17, column 2 to column 22)",
-                                                      " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 18, column 2 to column 22)",
-                                                      " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 19, column 2 to column 26)",
-                                                      " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 20, column 2 to column 20)",
+                                                      " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 17, column 2 to column 25)",
+                                                      " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 18, column 2 to column 25)",
+                                                      " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 19, column 2 to column 29)",
+                                                      " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 20, column 2 to column 21)",
                                                       " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 22, column 2 to column 29)",
                                                       " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 23, column 2 to column 29)",
                                                       " (in '/Users/aureliennioche/Documents/PythonProjects/ActiveTeachingCollaborative/model.stan', line 27, column 10 to column 58)",
@@ -289,13 +289,13 @@ class model_model final : public model_base_crtp<model_model> {
           in__.scalar(), "assigning variable U");}
       {
         current_statement__ = 7;
-        lp_accum__.add(normal_lpdf<propto__>(sg_w, 0, 1));
+        lp_accum__.add(inv_gamma_lpdf<propto__>(sg_w, 1, 1));
         current_statement__ = 8;
-        lp_accum__.add(normal_lpdf<propto__>(sg_u, 0, 1));
+        lp_accum__.add(inv_gamma_lpdf<propto__>(sg_u, 1, 1));
         current_statement__ = 9;
-        lp_accum__.add(normal_lpdf<propto__>(sg_theta, 0, 1));
+        lp_accum__.add(inv_gamma_lpdf<propto__>(sg_theta, 1, 1));
         current_statement__ = 10;
-        lp_accum__.add(normal_lpdf<propto__>(mu, 0, 1));
+        lp_accum__.add(normal_lpdf<propto__>(mu, 0, 10));
         current_statement__ = 11;
         lp_accum__.add(
           normal_lpdf<propto__>(
