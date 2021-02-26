@@ -8,13 +8,6 @@ data {
   int y[n_w, n_u, n_o];
 }
 transformed data {
-  vector[n] n_rep_arr;
-  vector[n] delta_arr;
-  int y_arr[n];
-  
-  n_rep_arr = to_vector(to_array_1d(n_rep));
-  delta_arr = to_vector(to_array_1d(delta));
-  y_arr = to_array_1d(y);
 }
 parameters {
   real<lower=0> sg_u1;
@@ -34,15 +27,16 @@ parameters {
   real theta2_wu[n_w, n_u];
 }
 model {
-  real theta1[n_w, n_u, n_o];
-  vector[n] theta1_arr;
-  real theta2[n_w, n_u, n_o];
-  vector[n] theta2_arr;
-  vector[n] a;
-  vector[n] b;
-  vector[n] rate;
-  vector[n] exponent;
-  vector[n] p;
+  real a;
+  real b;
+  vector[n_o] rate;
+  vector[n_o] exponent;
+  vector[n_o] p;
+  vector[n_o] p_suc;
+  vector[n_o] log_p;
+  vector[n_o] y_arr;
+  vector[n_o] delta_arr;
+  vector[n_o] n_rep_arr;
   
   sg_w1 ~ inv_gamma(1, 1);
   sg_u1 ~ inv_gamma(1, 1);
@@ -61,17 +55,17 @@ model {
   for (u in 1:n_u) {
     for (w in 1:n_w) {
       theta1_wu[w, u] ~ normal(mu1 + U1[u] + W1[w], sg_theta1);
-      theta1[w, u] = to_array_1d(rep_vector(theta1_wu[w, u], n_o)); 
       theta2_wu[w, u] ~ normal(mu2 + U2[u] + W2[w], sg_theta2);
-      theta2[w, u] = to_array_1d(rep_vector(theta2_wu[w, u], n_o)); 
+      a = exp(theta1_wu[w, u]);
+      b = inv_logit(theta2_wu[w, u]);
+      n_rep_arr = to_vector(n_rep[w, u]);
+      delta_arr = to_vector(delta[w, u]);
+      y_arr = to_vector(y[w, u]);
+      exponent = - rep_vector(a, n_o) .* pow(1-rep_vector(b, n_o), n_rep_arr) .* delta_arr;
+      p_suc = exp(exponent);
+      p = pow(p_suc, y_arr) .* pow(1-p_suc, 1-y_arr);
+      log_p = log(p);
+      target += sum(log_p);
     }
   }
-  
-  theta1_arr = to_vector(to_array_1d(theta1));
-  theta2_arr = to_vector(to_array_1d(theta2));
-  a = exp(theta1_arr);
-  b = inv_logit(theta2_arr);
-  exponent = - a .* pow(1-b, n_rep_arr) .* delta_arr;
-  p = exp(exponent);
-  y_arr ~ bernoulli(p);
 }
