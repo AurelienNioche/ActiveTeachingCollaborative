@@ -6,6 +6,7 @@ data {
   int n_rep[n_u, n_o];
   int y[n_u, n_o];
   int words[n_u, n_o];
+  int n_o_by_u[n_u];
 }
 transformed data {
 }
@@ -27,6 +28,9 @@ parameters {
   real theta2_wu[n_u, n_o];
 }
 model {
+  int n_ou;
+  real eps;
+  
   vector[n_o] a;
   vector[n_o] b;
   vector[n_o] rate;
@@ -40,6 +44,8 @@ model {
   vector[n_o] mu1_u;
   vector[n_o] mu2_u;
   int words_u[n_o];
+  
+  eps = machine_precision();
   
   sg_w1 ~ inv_gamma(1, 1);
   sg_u1 ~ inv_gamma(1, 1);
@@ -56,20 +62,21 @@ model {
   W2 ~ normal(0, sg_w2);
 
   for (u in 1:n_u) {
-    words_u = words[u];
-    mu1_u = rep_vector(mu1 + U1[u], n_o) + to_vector(W1[words_u]);
-    mu2_u = rep_vector(mu2 + U2[u], n_o) + to_vector(W2[words_u]);
-    theta1_wu[u] ~ normal(mu1_u, sg_theta1);
-    theta2_wu[u] ~ normal(mu2_u, sg_theta2);
-    a = exp(to_vector(theta1_wu[u]));
-    b = inv_logit(to_vector(theta2_wu[u]));
-    n_rep_arr = to_vector(n_rep[u]);
-    delta_arr = to_vector(delta[u]);
-    y_arr = to_vector(y[u]);
-    exponent = - a .* pow(1-b, n_rep_arr) .* delta_arr;
-    p_suc = exp(exponent);
-    p = pow(p_suc, y_arr) .* pow(1-p_suc, 1-y_arr);
-    log_p = log(p);
-    target += sum(log_p);
+    n_ou = n_o_by_u[u];
+    words_u[1:n_ou] = words[u, 1:n_ou];
+    mu1_u[1:n_ou] = rep_vector(mu1 + U1[u], n_ou) + to_vector(W1[words_u[1:n_ou]]);
+    mu2_u[1:n_ou] = rep_vector(mu2 + U2[u], n_ou) + to_vector(W2[words_u[1:n_ou]]);
+    theta1_wu[u, 1:n_ou] ~ normal(mu1_u[1:n_ou], sg_theta1);
+    theta2_wu[u, 1:n_ou] ~ normal(mu2_u[1:n_ou], sg_theta2);
+    a[1:n_ou] = exp(to_vector(theta1_wu[u, 1:n_ou]));
+    b[1:n_ou] = inv_logit(to_vector(theta2_wu[u, 1:n_ou]));
+    n_rep_arr[1:n_ou] = to_vector(n_rep[u, 1:n_ou]);
+    delta_arr[1:n_ou] = to_vector(delta[u, 1:n_ou]);
+    y_arr[1:n_ou] = to_vector(y[u, 1:n_ou]);
+    exponent[1:n_ou] = - a[1:n_ou] .* pow(1-b[1:n_ou], n_rep_arr[1:n_ou]) .* delta_arr[1:n_ou];
+    p_suc[1:n_ou] = exp(exponent[1:n_ou]);
+    p[1:n_ou] = pow(p_suc[1:n_ou], y_arr[1:n_ou]) .* pow(1-p_suc[1:n_ou], 1-y_arr[1:n_ou]);
+    log_p[1:n_ou] = log(p[1:n_ou]+eps);
+    target += sum(log_p[1:n_ou]);
   }
 }
