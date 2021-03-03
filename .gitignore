@@ -141,3 +141,8 @@ backup/
 *.hpp
 
 build/
+model2param
+model2paramIncmp
+modelXPdata
+model
+model2
