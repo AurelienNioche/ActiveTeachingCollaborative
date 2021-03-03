@@ -134,3 +134,10 @@ dmypy.json
 # Backup
 bkp/
 backup/
+*.p
+
+# Stan files
+*.stan
+*.hpp
+
+build/
