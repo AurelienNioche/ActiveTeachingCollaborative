@@ -101,7 +101,7 @@ class ProgressBarCallback(BaseCallback):
             obs = self.env.reset()
             rewards = []
             while True:
-                action, _state = self.model.predict(obs, deterministic=True)
+                action = self.model.predict(obs, deterministic=True)
                 obs, reward, done, info = self.env.step(action)
 
                 rewards.append(reward)
@@ -142,7 +142,7 @@ class ProgressBarManager:
 
 def main():
     env = Environment(t_max=100, alpha=0.2, tau=0.9)
-    model = A2C(env, seed=123)
+    model = A2C(env, seed=123, verbose=0)
 
     iterations = env.t_max * 1000
     check_freq = env.t_max

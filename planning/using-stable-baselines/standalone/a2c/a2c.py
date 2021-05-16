@@ -10,30 +10,24 @@ import gym
 from gym import spaces
 from torch.nn import functional as F
 
-from stable_baselines3.common import logger
-from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
-from stable_baselines3.common.policies import ActorCriticPolicy
+from . policy import ActorCriticPolicy
+from . rollout import RolloutBuffer
+
+# from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
+# from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance
-from stable_baselines3.common.buffers import RolloutBuffer
-
+# from stable_baselines3.common.buffers import RolloutBuffer
 from stable_baselines3.common import logger, utils
-
-from stable_baselines3.common.vec_env.base_vec_env import CloudpickleWrapper, VecEnv, VecEnvWrapper
+from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper
 from stable_baselines3.common.vec_env.dummy_vec_env import DummyVecEnv
-from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
-from stable_baselines3.common.vec_env.vec_check_nan import VecCheckNan
-from stable_baselines3.common.vec_env.vec_frame_stack import VecFrameStack
 from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
 from stable_baselines3.common.vec_env.vec_transpose import VecTransposeImage
-from stable_baselines3.common.vec_env.vec_video_recorder import VecVideoRecorder
-
 from stable_baselines3.common.callbacks import BaseCallback, CallbackList, ConvertCallback, EvalCallback
 from stable_baselines3.common.env_util import is_wrapped
-
 from stable_baselines3.common.preprocessing import is_image_space, is_image_space_channels_first
-
 from stable_baselines3.common.monitor import Monitor
+
 
 def safe_mean(arr: Union[np.ndarray, list, deque]) -> np.ndarray:
     """
@@ -94,7 +88,6 @@ class A2C:
 
     Introduction to A2C: https://hackernoon.com/intuitive-rl-intro-to-advantage-actor-critic-a2c-4ff545978752
 
-    :param policy: The policy model to use (MlpPolicy, CnnPolicy, ...)
     :param env: The environment to learn from (if registered in Gym, can be str)
     :param learning_rate: The learning rate, it can be a function
         of the current progress remaining (from 1 to 0)
@@ -109,10 +102,6 @@ class A2C:
     :param rms_prop_eps: RMSProp epsilon. It stabilizes square root computation in denominator
         of RMSProp update
     :param use_rms_prop: Whether to use RMSprop (default) or Adam as optimizer
-    :param use_sde: Whether to use generalized State Dependent Exploration (gSDE)
-        instead of action noise exploration (default: False)
-    :param sde_sample_freq: Sample a new noise matrix every n steps when using gSDE
-        Default: -1 (only sample at the beginning of the rollout)
     :param normalize_advantage: Whether to normalize or not the advantage
     :param tensorboard_log: the log location for tensorboard (if None, no logging)
     :param create_eval_env: Whether to create a second environment that will be
@@ -137,8 +126,6 @@ class A2C:
         max_grad_norm: float = 0.5,
         rms_prop_eps: float = 1e-5,
         use_rms_prop: bool = True,
-        use_sde: bool = False,
-        sde_sample_freq: int = -1,
         normalize_advantage: bool = False,
         tensorboard_log: Optional[str] = None,
         create_eval_env: bool = False,
@@ -183,9 +170,6 @@ class A2C:
         # When using VecNormalize:
         self._last_original_obs = None  # type: Optional[np.ndarray]
         self._episode_num = 0
-        # Used for gSDE only
-        self.use_sde = use_sde
-        self.sde_sample_freq = sde_sample_freq
         # Track the training progress remaining (from 1 to 0)
         # this is used to update the learning rate
         self._current_progress_remaining = 1
@@ -220,9 +204,6 @@ class A2C:
                     "Error: the model does not support multiple envs; it requires " "a single vectorized environment."
                 )
 
-            if self.use_sde and not isinstance(self.action_space, gym.spaces.Box):
-                raise ValueError("generalized State-Dependent Exploration (gSDE) can only be used with continuous actions.")
-
         self.n_steps = n_steps
         self.gamma = gamma
         self.gae_lambda = gae_lambda
@@ -232,14 +213,6 @@ class A2C:
         self.rollout_buffer = None
 
         self.normalize_advantage = normalize_advantage
-
-        # Update optimizer inside the policy if we want to use RMSProp
-        # (original implementation) rather than Adam
-        self.policy_kwargs = {}
-        if use_rms_prop:
-            self.policy_kwargs["optimizer_class"] = torch.optim.RMSprop
-            self.policy_kwargs["optimizer_kwargs"] = dict(alpha=0.99,
-                                                          eps=rms_prop_eps, weight_decay=0)
 
         self.lr_schedule = lambda _: self.learning_rate
 
@@ -262,11 +235,19 @@ class A2C:
             gae_lambda=self.gae_lambda,
             n_envs=self.n_envs,
         )
+
+        # Update optimizer inside the policy if we want to use RMSProp
+        # (original implementation) rather than Adam
+        self.policy_kwargs = {}
+        if use_rms_prop:
+            self.policy_kwargs["optimizer_class"] = torch.optim.RMSprop
+            self.policy_kwargs["optimizer_kwargs"] = dict(alpha=0.99,
+                                                          eps=rms_prop_eps, weight_decay=0)
+
         self.policy = ActorCriticPolicy(  # pytype:disable=not-instantiable
             self.observation_space,
             self.action_space,
             self.lr_schedule,
-            use_sde=self.use_sde,
             **self.policy_kwargs  # pytype:disable=not-instantiable
         )
         self.policy = self.policy.to(self.device)
@@ -350,16 +331,10 @@ class A2C:
         assert self._last_obs is not None, "No previous observation was provided"
         n_steps = 0
         rollout_buffer.reset()
-        # Sample new weights for the state dependent exploration
-        if self.use_sde:
-            self.policy.reset_noise(env.num_envs)
 
         callback.on_rollout_start()
 
         while n_steps < n_rollout_steps:
-            if self.use_sde and self.sde_sample_freq > 0 and n_steps % self.sde_sample_freq == 0:
-                # Sample a new noise matrix
-                self.policy.reset_noise(env.num_envs)
 
             with torch.no_grad():
                 # Convert to pytorch tensor
@@ -417,7 +392,7 @@ class A2C:
             tb_log_name: str = "OnPolicyAlgorithm",
             eval_log_path: Optional[str] = None,
             reset_num_timesteps: bool = True,
-    ) -> "OnPolicyAlgorithm":
+    ):
         iteration = 0
 
         total_timesteps, callback = self._setup_learn(
@@ -624,7 +599,6 @@ class A2C:
         callback.init_callback(self)
         return callback
 
-
     def get_env(self) -> Optional[VecEnv]:
         """
         Returns the current environment (can be None if not defined).
@@ -632,7 +606,6 @@ class A2C:
         :return: The current environment
         """
         return self.env
-
 
     def _update_info_buffer(self, infos: List[Dict[str, Any]], dones: Optional[np.ndarray] = None) -> None:
         """
@@ -693,18 +666,14 @@ class A2C:
     def predict(
         self,
         observation: np.ndarray,
-        state: Optional[np.ndarray] = None,
-        mask: Optional[np.ndarray] = None,
         deterministic: bool = False,
     ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """
         Get the model's action(s) from an observation
 
         :param observation: the input observation
-        :param state: The last states (can be None, used in recurrent policies)
-        :param mask: The last masks (can be None, used in recurrent policies)
         :param deterministic: Whether or not to return deterministic actions.
         :return: the model's action and the next state
             (used in recurrent policies)
         """
-        return self.policy.predict(observation, state, mask, deterministic)
+        return self.policy.predict(observation, deterministic)
