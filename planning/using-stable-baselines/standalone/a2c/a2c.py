@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Dict, Optional, Type, Union, Tuple, List
+from typing import Any, Dict, Optional, Type, Union, Tuple, List, Callable
 import time
 
 import numpy as np
@@ -12,70 +12,18 @@ from torch.nn import functional as F
 
 from . policy import ActorCriticPolicy
 from . rollout import RolloutBuffer
+from . environment_wrapper import Monitor
+from . callback import BaseCallback, ProgressBarManager
 
-# from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
-# from stable_baselines3.common.policies import ActorCriticPolicy
-from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
-from stable_baselines3.common.utils import explained_variance
-# from stable_baselines3.common.buffers import RolloutBuffer
-from stable_baselines3.common import logger, utils
+GymEnv = gym.Env
+GymObs = Union[Tuple, Dict[str, Any], np.ndarray, int]
+GymStepReturn = Tuple[GymObs, float, bool, Dict]
+TensorDict = Dict[str, torch.Tensor]
+OptimizerStateDict = Dict[str, Any]
+MaybeCallback = Union[ProgressBarManager, BaseCallback]
+
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper
 from stable_baselines3.common.vec_env.dummy_vec_env import DummyVecEnv
-from stable_baselines3.common.vec_env.vec_normalize import VecNormalize
-from stable_baselines3.common.vec_env.vec_transpose import VecTransposeImage
-from stable_baselines3.common.callbacks import BaseCallback, CallbackList, ConvertCallback, EvalCallback
-from stable_baselines3.common.env_util import is_wrapped
-from stable_baselines3.common.preprocessing import is_image_space, is_image_space_channels_first
-from stable_baselines3.common.monitor import Monitor
-
-
-def safe_mean(arr: Union[np.ndarray, list, deque]) -> np.ndarray:
-    """
-    Compute the mean of an array if there is at least one element.
-    For empty array, return NaN. It is used for logging only.
-
-    :param arr:
-    :return:
-    """
-    return np.nan if len(arr) == 0 else np.mean(arr)
-
-
-def maybe_make_env(env: Union[GymEnv, str, None], verbose: int) -> Optional[GymEnv]:
-    """If env is a string, make the environment; otherwise, return env.
-
-    :param env: The environment to learn from.
-    :param verbose: logging verbosity
-    :return A Gym (vector) environment.
-    """
-    if isinstance(env, str):
-        if verbose >= 1:
-            print(f"Creating environment from the given name '{env}'")
-        env = gym.make(env)
-    return env
-
-
-def unwrap_vec_wrapper(env: Union["GymEnv", VecEnv], vec_wrapper_class: Type[VecEnvWrapper]) -> Optional[VecEnvWrapper]:
-    """
-    Retrieve a ``VecEnvWrapper`` object by recursively searching.
-
-    :param env:
-    :param vec_wrapper_class:
-    :return:
-    """
-    env_tmp = env
-    while isinstance(env_tmp, VecEnvWrapper):
-        if isinstance(env_tmp, vec_wrapper_class):
-            return env_tmp
-        env_tmp = env_tmp.venv
-    return None
-
-
-def unwrap_vec_normalize(env: Union["GymEnv", VecEnv]) -> Optional[VecNormalize]:
-    """
-    :param env:
-    :return:
-    """
-    return unwrap_vec_wrapper(env, VecNormalize)  # pytype:disable=bad-return-type
 
 
 class A2C:
@@ -103,21 +51,16 @@ class A2C:
         of RMSProp update
     :param use_rms_prop: Whether to use RMSprop (default) or Adam as optimizer
     :param normalize_advantage: Whether to normalize or not the advantage
-    :param tensorboard_log: the log location for tensorboard (if None, no logging)
-    :param create_eval_env: Whether to create a second environment that will be
-        used for evaluating the agent periodically. (Only available when passing string for the environment)
     :param policy_kwargs: additional arguments to be passed to the policy on creation
     :param verbose: the verbosity level: 0 no output, 1 info, 2 debug
     :param seed: Seed for the pseudo random generators
-    :param device: Device (cpu, cuda, ...) on which the code should be run.
-        Setting it to auto, the code will be run on the GPU if possible.
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
     """
 
     def __init__(
         self,
-        env: Union[GymEnv, str],
-        learning_rate: Union[float, Schedule] = 7e-4,
+        env: GymEnv,
+        learning_rate: float = 7e-4,
         n_steps: int = 5,
         gamma: float = 0.99,
         gae_lambda: float = 1.0,
@@ -127,28 +70,13 @@ class A2C:
         rms_prop_eps: float = 1e-5,
         use_rms_prop: bool = True,
         normalize_advantage: bool = False,
-        tensorboard_log: Optional[str] = None,
-        create_eval_env: bool = False,
         verbose: int = 0,
         seed: Optional[int] = None,
         _init_setup_model: bool = True,
-        supported_action_spaces = (
-                spaces.Box,
-                spaces.Discrete,
-                spaces.MultiDiscrete,
-                spaces.MultiBinary,
-            ),
         monitor_wrapper: bool = True,
-        support_multi_env=True,
+        policy_kwargs: Union[Dict, None] = None,
     ):
-
-        self.device = torch.device("cpu")
-        if verbose > 0:
-            print(f"Using {self.device} device")
-
-        self.env = None  # type: Optional[GymEnv]
         # get VecNormalize object if needed
-        self._vec_normalize_env = unwrap_vec_normalize(env)
         self.verbose = verbose
 
         self.observation_space = None  # type: Optional[gym.spaces.Space]
@@ -157,14 +85,13 @@ class A2C:
         self.num_timesteps = 0
         # Used for updating schedules
         self._total_timesteps = 0
-        self.eval_env = None
+
         self.seed = seed
-        self.action_noise = None  # type: Optional[ActionNoise]
+
         self.start_time = None
         self.policy = None
         self.learning_rate = learning_rate
-        self.tensorboard_log = tensorboard_log
-        self.lr_schedule = None  # type: Optional[Schedule]
+
         self._last_obs = None  # type: Optional[np.ndarray]
         self._last_dones = None  # type: Optional[np.ndarray]
         # When using VecNormalize:
@@ -179,30 +106,13 @@ class A2C:
         # For logging (and TD3 delayed updates)
         self._n_updates = 0  # type: int
 
-        # Create and wrap the env if needed
-        if env is not None:
-            if isinstance(env, str):
-                if create_eval_env:
-                    self.eval_env = maybe_make_env(env, self.verbose)
+        # Wrap the env
+        env = self._wrap_env(env, self.verbose, monitor_wrapper)
 
-            env = maybe_make_env(env, self.verbose)
-            env = self._wrap_env(env, self.verbose, monitor_wrapper)
-
-            self.observation_space = env.observation_space
-            self.action_space = env.action_space
-            self.n_envs = env.num_envs
-            self.env = env
-
-            if supported_action_spaces is not None:
-                assert isinstance(self.action_space, supported_action_spaces), (
-                    f"The algorithm only supports {supported_action_spaces} as action spaces "
-                    f"but {self.action_space} was provided"
-                )
-
-            if not support_multi_env and self.n_envs > 1:
-                raise ValueError(
-                    "Error: the model does not support multiple envs; it requires " "a single vectorized environment."
-                )
+        self.observation_space = env.observation_space
+        self.action_space = env.action_space
+        self.n_envs = env.num_envs  # equal 1 by default
+        self.env = env
 
         self.n_steps = n_steps
         self.gamma = gamma
@@ -210,7 +120,6 @@ class A2C:
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
         self.max_grad_norm = max_grad_norm
-        self.rollout_buffer = None
 
         self.normalize_advantage = normalize_advantage
 
@@ -218,39 +127,36 @@ class A2C:
 
         # Seed numpy RNG
         np.random.seed(seed)
-        # seed the RNG for all devices (both CPU and CUDA)
+        # seed torch RNG
         torch.manual_seed(seed)
 
         self.action_space.seed(seed)
         self.env.seed(seed)
-        if self.eval_env is not None:  # None here!
-            self.eval_env.seed(seed)
 
         self.rollout_buffer = RolloutBuffer(
             self.n_steps,
             self.observation_space,
             self.action_space,
-            self.device,
             gamma=self.gamma,
             gae_lambda=self.gae_lambda,
-            n_envs=self.n_envs,
-        )
+            n_envs=self.n_envs)
 
         # Update optimizer inside the policy if we want to use RMSProp
         # (original implementation) rather than Adam
-        self.policy_kwargs = {}
+        if policy_kwargs is None:
+            policy_kwargs = {}
+        self.policy_kwargs = policy_kwargs
         if use_rms_prop:
             self.policy_kwargs["optimizer_class"] = torch.optim.RMSprop
             self.policy_kwargs["optimizer_kwargs"] = dict(alpha=0.99,
-                                                          eps=rms_prop_eps, weight_decay=0)
+                                                          eps=rms_prop_eps,
+                                                          weight_decay=0)
 
-        self.policy = ActorCriticPolicy(  # pytype:disable=not-instantiable
+        self.policy = ActorCriticPolicy(
             self.observation_space,
             self.action_space,
-            self.lr_schedule,
-            **self.policy_kwargs  # pytype:disable=not-instantiable
-        )
-        self.policy = self.policy.to(self.device)
+            self.learning_rate,
+            **self.policy_kwargs)
 
     def train(self) -> None:
         """
@@ -300,16 +206,7 @@ class A2C:
             nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
             self.policy.optimizer.step()
 
-        explained_var = explained_variance(self.rollout_buffer.values.flatten(), self.rollout_buffer.returns.flatten())
-
         self._n_updates += 1
-        logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
-        logger.record("train/explained_variance", explained_var)
-        logger.record("train/entropy_loss", entropy_loss.item())
-        logger.record("train/policy_loss", policy_loss.item())
-        logger.record("train/value_loss", value_loss.item())
-        if hasattr(self.policy, "log_std"):
-            logger.record("train/std", torch.exp(self.policy.log_std).mean().item())
 
     def collect_rollouts(
             self, env: VecEnv, callback: BaseCallback,
@@ -324,7 +221,7 @@ class A2C:
         :param callback: Callback that will be called at each step
             (and at the beginning and end of the rollout)
         :param rollout_buffer: Buffer to fill with rollouts
-        :param n_steps: Number of experiences to collect per environment
+        :param n_rollout_steps: Number of experiences to collect per environment
         :return: True if function returned with at least `n_rollout_steps`
             collected, False if callback terminated rollout prematurely.
         """
@@ -338,7 +235,7 @@ class A2C:
 
             with torch.no_grad():
                 # Convert to pytorch tensor
-                obs_tensor = torch.as_tensor(self._last_obs).to(self.device)
+                obs_tensor = torch.as_tensor(self._last_obs)
                 actions, values, log_probs = self.policy.forward(obs_tensor)
             actions = actions.cpu().numpy()
 
@@ -371,7 +268,7 @@ class A2C:
 
         with torch.no_grad():
             # Compute value for the last timestep
-            obs_tensor = torch.as_tensor(new_obs).to(self.device)
+            obs_tensor = torch.as_tensor(new_obs)
             _, values, _ = self.policy.forward(obs_tensor)
 
         rollout_buffer.compute_returns_and_advantage(last_values=values,
@@ -415,24 +312,6 @@ class A2C:
             self._update_current_progress_remaining(self.num_timesteps,
                                                     total_timesteps)
 
-            # Display training infos
-            if log_interval is not None and iteration % log_interval == 0:
-                fps = int(self.num_timesteps / (time.time() - self.start_time))
-                logger.record("time/iterations", iteration, exclude="tensorboard")
-                if len(self.ep_info_buffer) > 0 and len(
-                        self.ep_info_buffer[0]) > 0:
-                    logger.record("rollout/ep_rew_mean", safe_mean(
-                        [ep_info["r"] for ep_info in self.ep_info_buffer]))
-                    logger.record("rollout/ep_len_mean", safe_mean(
-                        [ep_info["l"] for ep_info in self.ep_info_buffer]))
-                logger.record("time/fps", fps)
-                logger.record("time/time_elapsed",
-                              int(time.time() - self.start_time),
-                              exclude="tensorboard")
-                logger.record("time/total_timesteps", self.num_timesteps,
-                              exclude="tensorboard")
-                logger.dump(step=self.num_timesteps)
-
             self.train()
 
         callback.on_training_end()
@@ -446,38 +325,17 @@ class A2C:
         return state_dicts, []
 
     @staticmethod
-    def _wrap_env(env: GymEnv, verbose: int = 0, monitor_wrapper: bool = True) -> VecEnv:
+    def _wrap_env(env: GymEnv) -> VecEnv:
         """ "
         Wrap environment with the appropriate wrappers if needed.
         For instance, to have a vectorized environment
         or to re-order the image channels.
 
         :param env:
-        :param verbose:
-        :param monitor_wrapper: Whether to wrap the env in a ``Monitor`` when possible.
         :return: The wrapped environment.
         """
-        if not isinstance(env, VecEnv):
-            if not is_wrapped(env, Monitor) and monitor_wrapper:
-                if verbose >= 1:
-                    print("Wrapping the env with a `Monitor` wrapper")
-                env = Monitor(env)
-            if verbose >= 1:
-                print("Wrapping the env in a DummyVecEnv.")
-            env = DummyVecEnv([lambda: env])
-
-        if (
-            is_image_space(env.observation_space)
-            and not is_vecenv_wrapped(env, VecTransposeImage)
-            and not is_image_space_channels_first(env.observation_space)
-        ):
-            if verbose >= 1:
-                print("Wrapping the env in a VecTransposeImage.")
-            env = VecTransposeImage(env)
-
-        # check if wrapper for dict support is needed when using HER
-        if isinstance(env.observation_space, gym.spaces.dict.Dict):
-            env = ObsDictWrapper(env)
+        env = Monitor(env)
+        env = DummyVecEnv([lambda: env])
 
         return env
 
@@ -490,7 +348,6 @@ class A2C:
             n_eval_episodes: int = 5,
             log_path: Optional[str] = None,
             reset_num_timesteps: bool = True,
-            tb_log_name: str = "run",
     ) -> Tuple[int, BaseCallback]:
         """
         Initialize different variables needed for training.
@@ -502,7 +359,6 @@ class A2C:
         :param n_eval_episodes: How many episodes to play per evaluation
         :param log_path: Path to a folder where the evaluations will be saved
         :param reset_num_timesteps: Whether to reset or not the ``num_timesteps`` attribute
-        :param tb_log_name: the name of the run for tensorboard log
         :return:
         """
         self.start_time = time.time()
@@ -510,10 +366,6 @@ class A2C:
             # Initialize buffers if they don't exist, or reinitialize if resetting counters
             self.ep_info_buffer = deque(maxlen=100)
             self.ep_success_buffer = deque(maxlen=100)
-
-        if self.action_noise is not None:
-            print("reset action noise")
-            self.action_noise.reset()
 
         if reset_num_timesteps:
             self.num_timesteps = 0
@@ -527,39 +379,12 @@ class A2C:
         if reset_num_timesteps or self._last_obs is None:
             self._last_obs = self.env.reset()
             self._last_dones = np.zeros((self.env.num_envs,), dtype=bool)
-            # Retrieve unnormalized observation for saving into the buffer
-            if self._vec_normalize_env is not None:
-                self._last_original_obs = self._vec_normalize_env.get_original_obs()
-
-        if eval_env is not None and self.seed is not None:
-            eval_env.seed(self.seed)
-
-        eval_env = self._get_eval_env(eval_env)
-
-        # Configure logger's outputs
-        utils.configure_logger(self.verbose, self.tensorboard_log, tb_log_name,
-                               reset_num_timesteps)
 
         # Create eval callback if needed
         callback = self._init_callback(callback, eval_env, eval_freq,
                                        n_eval_episodes, log_path)
 
         return total_timesteps, callback
-
-    def _get_eval_env(self, eval_env: Optional[GymEnv]) -> Optional[GymEnv]:
-        """
-        Return the environment that will be used for evaluation.
-
-        :param eval_env:)
-        :return:
-        """
-        if eval_env is None:
-            eval_env = self.eval_env
-
-        if eval_env is not None:
-            eval_env = self._wrap_env(eval_env, self.verbose)
-            assert eval_env.num_envs == 1
-        return eval_env
 
     def _init_callback(
         self,
@@ -577,24 +402,6 @@ class A2C:
         :param log_path: Path to a folder where the evaluations will be saved
         :return: A hybrid callback calling `callback` and performing evaluation.
         """
-        # Convert a list of callbacks into a callback
-        if isinstance(callback, list):
-            callback = CallbackList(callback)
-
-        # Convert functional callback to object
-        if not isinstance(callback, BaseCallback):
-            callback = ConvertCallback(callback)
-
-        # Create eval callback in charge of the evaluation
-        if eval_env is not None:
-            eval_callback = EvalCallback(
-                eval_env,
-                best_model_save_path=log_path,
-                log_path=log_path,
-                eval_freq=eval_freq,
-                n_eval_episodes=n_eval_episodes,
-            )
-            callback = CallbackList([callback, eval_callback])
 
         callback.init_callback(self)
         return callback
@@ -654,9 +461,6 @@ class A2C:
             """
             for param_group in optimizer.param_groups:
                 param_group["lr"] = learning_rate
-
-        # Log the current learning rate
-        logger.record("train/learning_rate", self.lr_schedule(self._current_progress_remaining))
 
         if not isinstance(optimizers, list):
             optimizers = [optimizers]

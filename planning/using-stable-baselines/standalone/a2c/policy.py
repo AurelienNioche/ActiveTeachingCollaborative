@@ -1,19 +1,16 @@
 from typing import Any, Dict, Optional, Type, Union, Tuple, List, Callable
-import collections
 from functools import partial
-from itertools import zip_longest
 
 import numpy as np
 
 import torch
 from torch import nn
-from torch.distributions import Categorical
 
 import gym
 from gym import spaces
 
 from . nn import MlpExtractor
-from .distribution import CategoricalDistribution
+from . distribution import CategoricalDistribution
 
 # A schedule takes the remaining progress as input
 # and ouputs a scalar (e.g. learning rate, clip range, ...)
@@ -52,7 +49,6 @@ class ActorCriticPolicy(nn.Module):
     :param net_arch: The specification of the policy and value networks.
     :param activation_fn: Activation function
     :param ortho_init: Whether to use or not orthogonal initialization
-    :param log_std_init: Initial value for the log standard deviation
     :param optimizer_class: The optimizer to use,
         ``torch.optim.Adam`` by default
     :param optimizer_kwargs: Additional keyword arguments,
@@ -63,26 +59,16 @@ class ActorCriticPolicy(nn.Module):
         self,
         observation_space: gym.spaces.Space,
         action_space: gym.spaces.Space,
-        lr_schedule: Schedule,
+        lr: float,
         net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
         activation_fn: Type[nn.Module] = nn.Tanh,
         ortho_init: bool = True,
         optimizer_class: Type[torch.optim.Optimizer] = torch.optim.Adam,
-        optimizer_kwargs: Optional[Dict[str, Any]] = None,
-    ):
+        optimizer_kwargs: Optional[Dict[str, Any]] = None):
         super().__init__()
-        if optimizer_kwargs is None:
-            optimizer_kwargs = {}
-            # Small values to avoid NaN in Adam optimizer
-            if optimizer_class == torch.optim.Adam:
-                optimizer_kwargs["eps"] = 1e-5
 
         self.observation_space = observation_space
         self.action_space = action_space
-
-        self.optimizer_class = optimizer_class
-        self.optimizer_kwargs = optimizer_kwargs
-        self.optimizer = None  # type: Optional[torch.optim.Optimizer]
 
         # Default network architecture, from stable-baselines
         if net_arch is None:
@@ -92,17 +78,17 @@ class ActorCriticPolicy(nn.Module):
         self.activation_fn = activation_fn
         self.ortho_init = ortho_init
 
-        self.features_extractor = FlattenExtractor(self.observation_space)
-        self.features_dim = self.features_extractor.features_dim
-
         # Action distribution
         assert isinstance(action_space, spaces.Discrete), \
             f"Error: probability distribution, " \
             f"not implemented for action space of type {type(action_space)}."
         self.action_dist = CategoricalDistribution(action_space.n)
 
+        self.features_extractor = FlattenExtractor(self.observation_space)
+        features_dim = self.features_extractor.features_dim
+
         self.mlp_extractor = MlpExtractor(
-            self.features_dim,
+            features_dim,
             net_arch=self.net_arch,
             activation_fn=self.activation_fn)
 
@@ -126,9 +112,18 @@ class ActorCriticPolicy(nn.Module):
                 module.apply(partial(self.init_weights, gain=gain))
 
         # Setup optimizer with initial learning rate
+        if optimizer_kwargs is None:
+            optimizer_kwargs = {}
+        # Small values to avoid NaN in Adam optimizer
+        if optimizer_class == torch.optim.Adam \
+                and "eps" not in optimizer_kwargs:
+            optimizer_kwargs["eps"] = 1e-5
+
+        self.optimizer_kwargs = optimizer_kwargs  # for saving
+        self.optimizer_class = optimizer_class    # for saving
         self.optimizer = optimizer_class(
             self.parameters(),
-            lr=lr_schedule(1), **optimizer_kwargs)
+            lr=lr, **self.optimizer_kwargs)
 
     def forward(self, obs: torch.Tensor, deterministic: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -263,16 +258,3 @@ class ActorCriticPolicy(nn.Module):
         # Load weights
         model.load_state_dict(saved_variables["state_dict"])
         return model
-#
-# def load_from_vector(self, vector: np.ndarray) -> None:
-#     """
-#     Load parameters from a 1D vector.
-#     """
-#     nn.utils.vector_to_parameters(torch.FloatTensor(vector),
-#                                   self.parameters())
-#
-# def parameters_to_vector(self) -> np.ndarray:
-#     """
-#     Convert the parameters to a 1D vector.
-#     """
-#     return nn.utils.parameters_to_vector(self.parameters()).detach().cpu().numpy()

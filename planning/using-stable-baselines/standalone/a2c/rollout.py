@@ -1,55 +1,9 @@
-from typing import Dict, Optional, Union, Tuple, Generator, NamedTuple
+from typing import Optional, Generator, NamedTuple
 
 import torch
 import numpy as np
 
 from gym import spaces
-
-from stable_baselines3.common.vec_env import VecNormalize
-
-
-def get_obs_shape(observation_space: spaces.Space) -> Tuple[int, ...]:
-    """
-    Get the shape of the observation (useful for the buffers).
-
-    :param observation_space:
-    :return:
-    """
-    if isinstance(observation_space, spaces.Box):
-        return observation_space.shape
-    elif isinstance(observation_space, spaces.Discrete):
-        # Observation is an int
-        return (1,)
-    elif isinstance(observation_space, spaces.MultiDiscrete):
-        # Number of discrete features
-        return (int(len(observation_space.nvec)),)
-    elif isinstance(observation_space, spaces.MultiBinary):
-        # Number of binary features
-        return (int(observation_space.n),)
-    else:
-        raise NotImplementedError(f"{observation_space} observation space is not supported")
-
-
-def get_action_dim(action_space: spaces.Space) -> int:
-    """
-    Get the dimension of the action space.
-
-    :param action_space:
-    :return:
-    """
-    if isinstance(action_space, spaces.Box):
-        return int(np.prod(action_space.shape))
-    elif isinstance(action_space, spaces.Discrete):
-        # Action is an int
-        return 1
-    elif isinstance(action_space, spaces.MultiDiscrete):
-        # Number of discrete actions
-        return int(len(action_space.nvec))
-    elif isinstance(action_space, spaces.MultiBinary):
-        # Number of binary actions
-        return int(action_space.n)
-    else:
-        raise NotImplementedError(f"{action_space} action space is not supported")
 
 
 class RolloutBufferSamples(NamedTuple):
@@ -71,21 +25,15 @@ class ReplayBufferSamples(NamedTuple):
 
 class RolloutBuffer:
     """
-    Rollout buffer used in on-policy algorithms like A2C/PPO.
-    It corresponds to ``buffer_size`` transitions collected
+    Rollout buffer corresponds to ``buffer_size`` transitions collected
     using the current policy.
     This experience will be discarded after the policy update.
-    In order to use PPO objective, we also store the current value of each state
-    and the log probability of each taken action.
 
-    The term rollout here refers to the model-free notion and should not
-    be used with the concept of rollout used in model-based RL or planning.
-    Hence, it is only involved in policy and value function training but not action selection.
+    Is only involved in policy and value function training but not action selection.
 
     :param buffer_size: Max number of element in the buffer
     :param observation_space: Observation space
     :param action_space: Action space
-    :param device:
     :param gae_lambda: Factor for trade-off of bias vs variance for Generalized Advantage Estimator
         Equivalent to classic advantage when set to 1.
     :param gamma: Discount factor
@@ -97,7 +45,6 @@ class RolloutBuffer:
         buffer_size: int,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        device: Union[torch.device, str] = "cpu",
         gae_lambda: float = 1,
         gamma: float = 0.99,
         n_envs: int = 1,
@@ -106,11 +53,15 @@ class RolloutBuffer:
         self.buffer_size = buffer_size
         self.observation_space = observation_space
         self.action_space = action_space
-        self.obs_shape = get_obs_shape(observation_space)
-        self.action_dim = get_action_dim(action_space)
+
+        assert isinstance(observation_space, spaces.Box)
+        self.obs_shape = observation_space.shape
+        assert isinstance(action_space, spaces.Discrete)
+        self.action_dim = 1
+
         self.pos = 0
         self.full = False
-        self.device = device
+
         self.n_envs = n_envs
 
         self.gae_lambda = gae_lambda
@@ -215,7 +166,7 @@ class RolloutBuffer:
             yield self._get_samples(indices[start_idx : start_idx + batch_size])
             start_idx += batch_size
 
-    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
+    def _get_samples(self, batch_inds: np.ndarray) -> RolloutBufferSamples:
         data = (
             self.observations[batch_inds],
             self.actions[batch_inds],
@@ -225,8 +176,7 @@ class RolloutBuffer:
             self.returns[batch_inds].flatten(),
         )
         return RolloutBufferSamples(*tuple(map(self.to_torch, data)))
-    
-    
+
     @staticmethod
     def swap_and_flatten(arr: np.ndarray) -> np.ndarray:
         """
@@ -250,24 +200,13 @@ class RolloutBuffer:
             return self.buffer_size
         return self.pos
 
-    def extend(self, *args, **kwargs) -> None:
+    def extend(self, *args) -> None:
         """
         Add a new batch of transitions to the buffer
         """
         # Do a for loop along the batch axis
         for data in zip(*args):
             self.add(*data)
-
-    def sample(self, batch_size: int, env: Optional[VecNormalize] = None):
-        """
-        :param batch_size: Number of element to sample
-        :param env: associated gym VecEnv
-            to normalize the observations/rewards when sampling
-        :return:
-        """
-        upper_bound = self.buffer_size if self.full else self.pos
-        batch_inds = np.random.randint(0, upper_bound, size=batch_size)
-        return self._get_samples(batch_inds, env=env)
 
     def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
         """
@@ -280,19 +219,5 @@ class RolloutBuffer:
         :return:
         """
         if copy:
-            return torch.tensor(array).to(self.device)
-        return torch.as_tensor(array).to(self.device)
-
-    @staticmethod
-    def _normalize_obs(
-        obs: Union[np.ndarray, Dict[str, np.ndarray]], env: Optional[VecNormalize] = None
-    ) -> Union[np.ndarray, Dict[str, np.ndarray]]:
-        if env is not None:
-            return env.normalize_obs(obs)
-        return obs
-
-    @staticmethod
-    def _normalize_reward(reward: np.ndarray, env: Optional[VecNormalize] = None) -> np.ndarray:
-        if env is not None:
-            return env.normalize_reward(reward).astype(np.float32)
-        return reward
+            return torch.tensor(array)
+        return torch.as_tensor(array)
