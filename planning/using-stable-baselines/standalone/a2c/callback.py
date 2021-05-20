@@ -39,11 +39,7 @@ class BaseCallback(ABC):
         RL model and the training environment for convenience.
         """
         self.model = model
-        self.training_env = model.get_env()
-        self._init_callback()
-
-    def _init_callback(self) -> None:
-        pass
+        self.training_env = model.env
 
     def on_training_start(self, locals_: Dict[str, Any], globals_: Dict[str, Any]) -> None:
         # Those are reference and will be updated automatically
@@ -157,8 +153,9 @@ class ProgressBarManager:
         self.check_freq = check_freq
         self.pbar_callback = None
 
-    def __enter__(
-            self):  # create the progress bar and callback, return the callback
+    def __enter__(self):
+        # create the progress bar and callback,
+        # return the callback
         self.pbar = tqdm(total=self.total_timesteps)
         self.pbar_callback = ProgressBarCallback(self.pbar, self.env,
                                                  self.check_freq)
@@ -171,5 +168,4 @@ class ProgressBarManager:
 
     @property
     def hist_rewards(self):
-        print("hey")
         return self.pbar_callback.hist_rewards

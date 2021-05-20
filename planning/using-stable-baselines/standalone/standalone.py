@@ -23,8 +23,8 @@ class Environment(gym.Env):
         self.action_space = spaces.Discrete(n_item)
         self.observation_space = spaces.Box(low=0.0, high=np.inf,
                                             shape=(n_item, 2))
-        self.state = torch.zeros((n_item, 2))
-        self.obs = torch.zeros((n_item, 2))
+        self.state = np.zeros((n_item, 2))
+        self.obs = np.zeros((n_item, 2))
         self.n_item = n_item
         self.t_max = t_max
         self.t = 0
@@ -34,8 +34,8 @@ class Environment(gym.Env):
         self.beta = beta
 
     def reset(self):
-        self.state = torch.zeros((self.n_item, 2))
-        self.obs = torch.zeros((self.n_item, 2))
+        self.state = np.zeros((self.n_item, 2))
+        self.obs = np.zeros((self.n_item, 2))
         self.t = 0
         return self.obs
 
@@ -54,9 +54,9 @@ class Environment(gym.Env):
 
         logp_recall = - forget_rate * delta
         above_thr = logp_recall > self.log_tau
-        reward = torch.count_nonzero(above_thr).item() / self.n_item
+        reward = np.count_nonzero(above_thr) / self.n_item
 
-        self.obs[view, 0] = torch.exp(-forget_rate * (delta + 1))
+        self.obs[view, 0] = np.exp(-forget_rate * (delta + 1))
         self.obs[view, 1] = forget_rate
 
         info = {}
@@ -65,6 +65,7 @@ class Environment(gym.Env):
 
 
 def main():
+
     env = Environment(t_max=100, alpha=0.2, tau=0.9)
     model = A2C(env, seed=123, verbose=0)
 

@@ -1,24 +1,16 @@
 import numpy as np
 
 import torch
-from torch.autograd import Variable
-import torch.autograd as autograd
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.distributions import Normal
 
 from tqdm.autonotebook import tqdm
 
 import gym
 from gym import spaces
 
-from stable_baselines3 import A2C, PPO
+from stable_baselines3 import A2C
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-import os
 
 import copy
 
