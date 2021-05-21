@@ -1,18 +1,15 @@
-from collections import deque
-from typing import Any, Dict, Optional, Type, Union, Tuple, List, Callable
-import time
+from typing import Any, Dict, Optional, Union, Tuple, List
 
 import numpy as np
 
 import torch
 from torch import nn
 import gym
-from gym import spaces
 from torch.nn import functional as F
 
 from .policy import ActorCriticPolicy
 from .rollout import RolloutBuffer
-from .environment_wrapper import Monitor
+from .environment_wrapper import DummyVecEnv
 from .callback import BaseCallback, ProgressBarManager
 
 GymEnv = gym.Env
@@ -21,9 +18,6 @@ GymStepReturn = Tuple[GymObs, float, bool, Dict]
 TensorDict = Dict[str, torch.Tensor]
 OptimizerStateDict = Dict[str, Any]
 MaybeCallback = Union[ProgressBarManager, BaseCallback]
-
-from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper
-from stable_baselines3.common.vec_env.dummy_vec_env import DummyVecEnv
 
 
 class A2C:
@@ -55,38 +49,32 @@ class A2C:
     """
 
     def __init__(
-            self,
-            env: GymEnv,
-            learning_rate: float = 7e-4,
-            n_steps: int = 5,
-            gamma: float = 0.99,
-            gae_lambda: float = 1.0,
-            ent_coef: float = 0.0,
-            vf_coef: float = 0.5,
-            max_grad_norm: float = 0.5,
-            rms_prop_eps: float = 1e-5,
-            use_rms_prop: bool = True,
-            normalize_advantage: bool = False,
-            verbose: int = 0,
-            seed: Optional[int] = None,
-            _init_setup_model: bool = True,
-            monitor_wrapper: bool = True,
-            policy_kwargs: Union[Dict, None] = None,
+        self,
+        env: GymEnv,
+        learning_rate: float = 7e-4,
+        n_steps: int = 5,
+        gamma: float = 0.99,
+        gae_lambda: float = 1.0,
+        ent_coef: float = 0.0,
+        vf_coef: float = 0.5,
+        max_grad_norm: float = 0.5,
+        rms_prop_eps: float = 1e-5,
+        use_rms_prop: bool = True,
+        normalize_advantage: bool = False,
+        verbose: int = 0,
+        seed: Optional[int] = None,
+        _init_setup_model: bool = True,
+        policy_kwargs: Union[Dict, None] = None,
     ):
         # get VecNormalize object if needed
         self.verbose = verbose
 
-        self.observation_space = None  # type: Optional[gym.spaces.Space]
-        self.action_space = None  # type: Optional[gym.spaces.Space]
-        self.n_envs = None
         self.num_timesteps = 0
         # Used for updating schedules
         self._total_timesteps = 0
 
         self.seed = seed
 
-        self.start_time = None
-        self.policy = None
         self.learning_rate = learning_rate
 
         self._last_obs = None  # type: Optional[np.ndarray]
@@ -97,19 +85,12 @@ class A2C:
         # Track the training progress remaining (from 1 to 0)
         # this is used to update the learning rate
         self._current_progress_remaining = 1
-        # Buffers for logging
-        self.ep_info_buffer = None  # type: Optional[deque]
-        self.ep_success_buffer = None  # type: Optional[deque]
-        # For logging (and TD3 delayed updates)
-        self._n_updates = 0  # type: int
 
         # Wrap the env
-        env = self._wrap_env(env)
+        self.env = DummyVecEnv(env)
 
-        self.observation_space = env.observation_space
-        self.action_space = env.action_space
-        self.n_envs = env.num_envs  # equal 1 by default
-        self.env = env
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
 
         self.n_steps = n_steps
         self.gamma = gamma
@@ -135,8 +116,7 @@ class A2C:
             self.observation_space,
             self.action_space,
             gamma=self.gamma,
-            gae_lambda=self.gae_lambda,
-            n_envs=self.n_envs)
+            gae_lambda=self.gae_lambda)
 
         # Update optimizer inside the policy if we want to use RMSProp
         # (original implementation) rather than Adam
@@ -167,9 +147,8 @@ class A2C:
         for rollout_data in self.rollout_buffer.get(batch_size=None):
 
             actions = rollout_data.actions
-            if isinstance(self.action_space, spaces.Discrete):
-                # Convert discrete action from float to long
-                actions = actions.long().flatten()
+            # Convert discrete action from float to long
+            actions = actions.long().flatten()
 
             # TODO: avoid second computation of everything because of the gradient
             values, log_prob, entropy = self.policy.evaluate_actions(
@@ -179,8 +158,9 @@ class A2C:
             # Normalize advantage (not present in the original implementation)
             advantages = rollout_data.advantages
             if self.normalize_advantage:
-                advantages = (advantages - advantages.mean()) / (
-                            advantages.std() + 1e-8)
+                advantages = \
+                    (advantages - advantages.mean()) \
+                    / (advantages.std() + 1e-8)
 
             # Policy gradient loss
             policy_loss = -(advantages * log_prob).mean()
@@ -189,13 +169,11 @@ class A2C:
             value_loss = F.mse_loss(rollout_data.returns, values)
 
             # Entropy loss favor exploration
-            if entropy is None:
-                # Approximate entropy when no analytical form
-                entropy_loss = -torch.mean(-log_prob)
-            else:
-                entropy_loss = -torch.mean(entropy)
+            entropy_loss = -torch.mean(entropy)
 
-            loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
+            loss = policy_loss \
+                + self.ent_coef * entropy_loss \
+                + self.vf_coef * value_loss
 
             # Optimization step
             self.policy.optimizer.zero_grad()
@@ -206,31 +184,22 @@ class A2C:
                                      self.max_grad_norm)
             self.policy.optimizer.step()
 
-        self._n_updates += 1
-
-    def collect_rollouts(
-            self, env: VecEnv, callback: BaseCallback,
-            rollout_buffer: RolloutBuffer, n_rollout_steps: int
-    ) -> bool:
+    def collect_rollouts(self, callback: BaseCallback) -> bool:
         """
         Collect experiences using the current policy and fill a ``RolloutBuffer``.
         The term rollout here refers to the model-free notion and should not
         be used with the concept of rollout used in model-based RL or planning.
-        :param env: The training environment
         :param callback: Callback that will be called at each step
             (and at the beginning and end of the rollout)
-        :param rollout_buffer: Buffer to fill with rollouts
-        :param n_rollout_steps: Number of experiences to collect per environment
         :return: True if function returned with at least `n_rollout_steps`
             collected, False if callback terminated rollout prematurely.
         """
         assert self._last_obs is not None, "No previous observation was provided"
         n_steps = 0
-        rollout_buffer.reset()
-
+        self.rollout_buffer.reset()
         callback.on_rollout_start()
 
-        while n_steps < n_rollout_steps:
+        while n_steps < self.n_steps:
 
             with torch.no_grad():
                 # Convert to pytorch tensor
@@ -238,31 +207,22 @@ class A2C:
                 actions, values, log_probs = self.policy.forward(obs_tensor)
             actions = actions.cpu().numpy()
 
-            # Rescale and perform action
-            clipped_actions = actions
-            # Clip the actions to avoid out of bound error
-            if isinstance(self.action_space, gym.spaces.Box):
-                clipped_actions = np.clip(actions, self.action_space.low,
-                                          self.action_space.high)
+            # Perform action
+            new_obs, rewards, dones, infos = self.env.step(actions)
 
-            new_obs, rewards, dones, infos = env.step(clipped_actions)
-
-            self.num_timesteps += env.num_envs
+            self.num_timesteps += self.env.num_envs
 
             # Give access to local variables
             callback.update_locals(locals())
             if callback.on_step() is False:
                 return False
 
-            self._update_info_buffer(infos)
             n_steps += 1
 
-            if isinstance(self.action_space, gym.spaces.Discrete):
-                # Reshape in case of discrete action
-                actions = actions.reshape(-1, 1)
-            rollout_buffer.add(self._last_obs, actions, rewards,
-                               self._last_dones,
-                               values, log_probs)
+            actions = actions.reshape(-1, 1)
+            self.rollout_buffer.add(self._last_obs, actions, rewards,
+                                    self._last_dones,
+                                    values, log_probs)
             self._last_obs = new_obs
             self._last_dones = dones
 
@@ -271,11 +231,11 @@ class A2C:
             obs_tensor = torch.as_tensor(new_obs)
             _, values, _ = self.policy.forward(obs_tensor)
 
-        rollout_buffer.compute_returns_and_advantage(last_values=values,
-                                                     dones=dones)
+        self.rollout_buffer.compute_returns_and_advantage(
+            last_values=values,
+            dones=dones)
 
         callback.on_rollout_end()
-
         return True
 
     def learn(
@@ -288,30 +248,22 @@ class A2C:
             n_eval_episodes: int = 5,
             tb_log_name: str = "OnPolicyAlgorithm",
             eval_log_path: Optional[str] = None,
-            reset_num_timesteps: bool = True,
-    ):
-        iteration = 0
+            reset_num_timesteps: bool = True):
 
         total_timesteps, callback = self._setup_learn(
-            total_timesteps, eval_env, callback, eval_freq, n_eval_episodes,
-            eval_log_path, reset_num_timesteps
-        )
+            total_timesteps, callback, reset_num_timesteps)
 
         callback.on_training_start(locals(), globals())
 
         while self.num_timesteps < total_timesteps:
 
-            continue_training = self.collect_rollouts(self.env, callback,
-                                                      self.rollout_buffer,
-                                                      n_rollout_steps=self.n_steps)
+            continue_training = self.collect_rollouts(callback)
 
             if continue_training is False:
                 break
 
-            iteration += 1
             self._update_current_progress_remaining(self.num_timesteps,
                                                     total_timesteps)
-
             self.train()
 
         callback.on_training_end()
@@ -323,46 +275,19 @@ class A2C:
 
         return state_dicts, []
 
-    @staticmethod
-    def _wrap_env(env: GymEnv) -> VecEnv:
-        """ "
-        Wrap environment with the appropriate wrappers if needed.
-        For instance, to have a vectorized environment
-        or to re-order the image channels.
-        :param env:
-        :return: The wrapped environment.
-        """
-        env = Monitor(env)
-        env = DummyVecEnv([lambda: env])
-
-        return env
-
     def _setup_learn(
             self,
             total_timesteps: int,
-            eval_env: Optional[GymEnv],
             callback: MaybeCallback = None,
-            eval_freq: int = 10000,
-            n_eval_episodes: int = 5,
-            log_path: Optional[str] = None,
             reset_num_timesteps: bool = True,
     ) -> Tuple[int, BaseCallback]:
         """
         Initialize different variables needed for training.
         :param total_timesteps: The total number of samples (env steps) to train on
-        :param eval_env: Environment to use for evaluation.
         :param callback: Callback(s) called at every step with state of the algorithm.
-        :param eval_freq: How many steps between evaluations
-        :param n_eval_episodes: How many episodes to play per evaluation
-        :param log_path: Path to a folder where the evaluations will be saved
         :param reset_num_timesteps: Whether to reset or not the ``num_timesteps`` attribute
         :return:
         """
-        self.start_time = time.time()
-        if self.ep_info_buffer is None or reset_num_timesteps:
-            # Initialize buffers if they don't exist, or reinitialize if resetting counters
-            self.ep_info_buffer = deque(maxlen=100)
-            self.ep_success_buffer = deque(maxlen=100)
 
         if reset_num_timesteps:
             self.num_timesteps = 0
@@ -375,58 +300,13 @@ class A2C:
         # Avoid resetting the environment when calling ``.learn()`` consecutive times
         if reset_num_timesteps or self._last_obs is None:
             self._last_obs = self.env.reset()
-            self._last_dones = np.zeros((self.env.num_envs,), dtype=bool)
+            self._last_dones = np.zeros((1,), dtype=bool)
 
         # Create eval callback if needed
-        callback = self._init_callback(callback, eval_env, eval_freq,
-                                       n_eval_episodes, log_path)
+        if callback is not None:
+            callback.init_callback(self)
 
         return total_timesteps, callback
-
-    def _init_callback(
-            self,
-            callback: MaybeCallback,
-            eval_env: Optional[VecEnv] = None,
-            eval_freq: int = 10000,
-            n_eval_episodes: int = 5,
-            log_path: Optional[str] = None,
-    ) -> BaseCallback:
-        """
-        :param callback: Callback(s) called at every step with state of the algorithm.
-        :param eval_freq: How many steps between evaluations; if None, do not evaluate.
-        :param n_eval_episodes: How many episodes to play per evaluation
-        :param n_eval_episodes: Number of episodes to rollout during evaluation.
-        :param log_path: Path to a folder where the evaluations will be saved
-        :return: A hybrid callback calling `callback` and performing evaluation.
-        """
-
-        callback.init_callback(self)
-        return callback
-
-    def get_env(self) -> Optional[VecEnv]:
-        """
-        Returns the current environment (can be None if not defined).
-        :return: The current environment
-        """
-        return self.env
-
-    def _update_info_buffer(self, infos: List[Dict[str, Any]],
-                            dones: Optional[np.ndarray] = None) -> None:
-        """
-        Retrieve reward, episode length, episode success and update the buffer
-        if using Monitor wrapper or a GoalEnv.
-        :param infos: List of additional information about the transition.
-        :param dones: Termination signals
-        """
-        if dones is None:
-            dones = np.array([False] * len(infos))
-        for idx, info in enumerate(infos):
-            maybe_ep_info = info.get("episode")
-            maybe_is_success = info.get("is_success")
-            if maybe_ep_info is not None:
-                self.ep_info_buffer.extend([maybe_ep_info])
-            if maybe_is_success is not None and dones[idx]:
-                self.ep_success_buffer.append(maybe_is_success)
 
     def _update_current_progress_remaining(self, num_timesteps: int,
                                            total_timesteps: int) -> None:
@@ -438,31 +318,15 @@ class A2C:
         self._current_progress_remaining = 1.0 - float(num_timesteps) / float(
             total_timesteps)
 
-    def _update_learning_rate(self, optimizers: Union[
-        List[torch.optim.Optimizer], torch.optim.Optimizer]) -> None:
+    def _update_learning_rate(self, optimizer: torch.optim.Optimizer) -> None:
         """
         Update the optimizers learning rate using the current learning rate schedule
         and the current progress remaining (from 1 to 0).
-        :param optimizers:
-            An optimizer or a list of optimizers.
+        :param optimizer: An optimizer.
         """
-
-        def update_learning_rate(optimizer: torch.optim.Optimizer,
-                                 learning_rate: float) -> None:
-            """
-            Update the learning rate for a given optimizer.
-            Useful when doing linear schedule.
-            :param optimizer:
-            :param learning_rate:
-            """
-            for param_group in optimizer.param_groups:
-                param_group["lr"] = learning_rate
-
-        if not isinstance(optimizers, list):
-            optimizers = [optimizers]
-        for optimizer in optimizers:
-            update_learning_rate(optimizer, self.lr_schedule(
-                self._current_progress_remaining))
+        lr = self.lr_schedule(self._current_progress_remaining)
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
 
     def predict(
             self,

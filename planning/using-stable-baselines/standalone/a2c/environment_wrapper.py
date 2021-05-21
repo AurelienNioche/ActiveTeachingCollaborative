@@ -1,4 +1,5 @@
-from typing import Optional, Tuple,  Union, Dict, Any, List
+from typing import Optional, Tuple,  Union, Dict, Any, List, Sequence, Type, Iterable, Callable
+from collections import OrderedDict
 import os
 import time
 import json
@@ -7,146 +8,157 @@ import numpy as np
 
 import gym
 
+from copy import deepcopy
+
+from stable_baselines3.common.vec_env.base_vec_env import VecEnvWrapper
+
+
 GymObs = Union[Tuple, Dict[str, Any], np.ndarray, int]
 GymStepReturn = Tuple[GymObs, float, bool, Dict]
 
+# Define type aliases here to avoid circular import
+# Used when we want to access one or more VecEnv
+VecEnvIndices = Union[None, int, Iterable[int]]
+# VecEnvObs is what is returned by the reset() method
+# it contains the observation for each env
+VecEnvObs = Union[np.ndarray, Dict[str, np.ndarray], Tuple[np.ndarray, ...]]
+# VecEnvStepReturn is what is returned by the step() method
+# it contains the observation, reward, done, info for each env
+VecEnvStepReturn = Tuple[VecEnvObs, np.ndarray, np.ndarray, List[Dict]]
 
-class Monitor(gym.Wrapper):
+
+def obs_space_info(obs_space: gym.spaces.Space) -> Tuple[List[str], Dict[Any, Tuple[int, ...]], Dict[Any, np.dtype]]:
     """
-    A monitor wrapper for Gym environments, it is used to know the episode reward, length, time and other data.
+    Get dict-structured information about a gym.Space.
 
-    :param env: The environment
-    :param filename: the location to save a log file, can be None for no log
-    :param allow_early_resets: allows the reset of the environment before it is done
-    :param reset_keywords: extra keywords for the reset call,
-        if extra parameters are needed at reset
-    :param info_keywords: extra information to log, from the information return of env.step()
+    Dict spaces are represented directly by their dict of subspaces.
+    Tuple spaces are converted into a dict with keys indexing into the tuple.
+    Unstructured spaces are represented by {None: obs_space}.
+
+    :param obs_space: an observation space
+    :return: A tuple (keys, shapes, dtypes):
+        keys: a list of dict keys.
+        shapes: a dict mapping keys to shapes.
+        dtypes: a dict mapping keys to dtypes.
+    """
+    if isinstance(obs_space, gym.spaces.Dict):
+        assert isinstance(obs_space.spaces, OrderedDict), "Dict space must have ordered subspaces"
+        subspaces = obs_space.spaces
+    elif isinstance(obs_space, gym.spaces.Tuple):
+        subspaces = {i: space for i, space in enumerate(obs_space.spaces)}
+    else:
+        assert not hasattr(obs_space, "spaces"), f"Unsupported structured space '{type(obs_space)}'"
+        subspaces = {None: obs_space}
+    keys = []
+    shapes = {}
+    dtypes = {}
+    for key, box in subspaces.items():
+        keys.append(key)
+        shapes[key] = box.shape
+        dtypes[key] = box.dtype
+    return keys, shapes, dtypes
+
+
+def copy_obs_dict(obs: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    """
+    Deep-copy a dict of numpy arrays.
+
+    :param obs: a dict of numpy arrays.
+    :return: a dict of copied numpy arrays.
+    """
+    assert isinstance(obs, OrderedDict), f"unexpected type for observations '{type(obs)}'"
+    return OrderedDict([(k, np.copy(v)) for k, v in obs.items()])
+
+
+def dict_to_obs(space: gym.spaces.Space, obs_dict: Dict[Any, np.ndarray]) -> VecEnvObs:
+    """
+    Convert an internal representation raw_obs into the appropriate type
+    specified by space.
+
+    :param space: an observation space.
+    :param obs_dict: a dict of numpy arrays.
+    :return: returns an observation of the same type as space.
+        If space is Dict, function is identity; if space is Tuple, converts dict to Tuple;
+        otherwise, space is unstructured and returns the value raw_obs[None].
+    """
+    if isinstance(space, gym.spaces.Dict):
+        return obs_dict
+    elif isinstance(space, gym.spaces.Tuple):
+        assert len(obs_dict) == len(space.spaces), "size of observation does not match size of observation space"
+        return tuple((obs_dict[i] for i in range(len(space.spaces))))
+    else:
+        assert set(obs_dict.keys()) == {None}, "multiple observation keys for unstructured observation space"
+        return obs_dict[None]
+
+
+class DummyVecEnv:
+    """
+    Creates a simple vectorized wrapper for multiple environments, calling each environment in sequence on the current
+    Python process. This is useful for computationally simple environment such as ``cartpole-v1``,
+    as the overhead of multiprocess or multithread outweighs the environment computation time.
+    This can also be used for RL methods that
+    require a vectorized environment, but that you want a single environments to train with.
+
+    :param env_fns: a list of functions
+        that return environments to vectorize
     """
 
-    EXT = "monitor.csv"
+    def __init__(self, env: gym.Env):
+        self.envs = [env, ]
+        self.env = env
+        self.num_envs = len(self.envs)
+        self.observation_space = env.observation_space
+        self.action_space = env.action_space
 
-    def __init__(
-        self,
-        env: gym.Env,
-        filename: Optional[str] = None,
-        allow_early_resets: bool = True,
-        reset_keywords: Tuple[str, ...] = (),
-        info_keywords: Tuple[str, ...] = (),
-    ):
-        super(Monitor, self).__init__(env=env)
-        self.t_start = time.time()
-        if filename is None:
-            self.file_handler = None
-            self.logger = None
-        else:
-            if not filename.endswith(Monitor.EXT):
-                if os.path.isdir(filename):
-                    filename = os.path.join(filename, Monitor.EXT)
-                else:
-                    filename = filename + "." + Monitor.EXT
-            self.file_handler = open(filename, "wt")
-            self.file_handler.write("#%s\n" % json.dumps({"t_start": self.t_start, "env_id": env.spec and env.spec.id}))
-            self.logger = csv.DictWriter(self.file_handler, fieldnames=("r", "l", "t") + reset_keywords + info_keywords)
-            self.logger.writeheader()
-            self.file_handler.flush()
+        obs_space = env.observation_space
+        self.keys, shapes, dtypes = obs_space_info(obs_space)
 
-        self.reset_keywords = reset_keywords
-        self.info_keywords = info_keywords
-        self.allow_early_resets = allow_early_resets
-        self.rewards = None
-        self.needs_reset = True
-        self.episode_rewards = []
-        self.episode_lengths = []
-        self.episode_times = []
-        self.total_steps = 0
-        self.current_reset_info = {}  # extra info about the current episode, that was passed in during reset()
+        self.buf_obs = OrderedDict([(k, np.zeros((self.num_envs,) + tuple(shapes[k]), dtype=dtypes[k])) for k in self.keys])
+        self.buf_dones = np.zeros((self.num_envs,), dtype=bool)
+        self.buf_rews = np.zeros((self.num_envs,), dtype=np.float32)
+        self.buf_infos = [{} for _ in range(self.num_envs)]
+        self.actions = None
+        self.metadata = env.metadata
 
-    def reset(self, **kwargs) -> GymObs:
-        """
-        Calls the Gym environment reset. Can only be called if the environment is over, or if allow_early_resets is True
+    def seed(self, seed: int) -> None:
+        self.env.seed(seed)
 
-        :param kwargs: Extra keywords saved for the next episode. only if defined by reset_keywords
-        :return: the first observation of the environment
-        """
-        if not self.allow_early_resets and not self.needs_reset:
-            raise RuntimeError(
-                "Tried to reset an environment before done. If you want to allow early resets, "
-                "wrap your env with Monitor(env, path, allow_early_resets=True)"
-            )
-        self.rewards = []
-        self.needs_reset = False
-        for key in self.reset_keywords:
-            value = kwargs.get(key)
-            if value is None:
-                raise ValueError("Expected you to pass kwarg {} into reset".format(key))
-            self.current_reset_info[key] = value
-        return self.env.reset(**kwargs)
-
-    def step(self, action: Union[np.ndarray, int]) -> GymStepReturn:
-        """
-        Step the environment with the given action
-
-        :param action: the action
-        :return: observation, reward, done, information
-        """
-        if self.needs_reset:
-            raise RuntimeError("Tried to step environment that needs reset")
-        observation, reward, done, info = self.env.step(action)
-        self.rewards.append(reward)
-        if done:
-            self.needs_reset = True
-            ep_rew = sum(self.rewards)
-            ep_len = len(self.rewards)
-            ep_info = {"r": round(ep_rew, 6), "l": ep_len, "t": round(time.time() - self.t_start, 6)}
-            for key in self.info_keywords:
-                ep_info[key] = info[key]
-            self.episode_rewards.append(ep_rew)
-            self.episode_lengths.append(ep_len)
-            self.episode_times.append(time.time() - self.t_start)
-            ep_info.update(self.current_reset_info)
-            if self.logger:
-                self.logger.writerow(ep_info)
-                self.file_handler.flush()
-            info["episode"] = ep_info
-        self.total_steps += 1
-        return observation, reward, done, info
+    def reset(self) -> np.ndarray:
+        obs = self.env.reset()
+        self._save_obs(0, obs)
+        return self._obs_from_buf()
 
     def close(self) -> None:
-        """
-        Closes the environment
-        """
-        super(Monitor, self).close()
-        if self.file_handler is not None:
-            self.file_handler.close()
+        self.env.close()
 
-    def get_total_steps(self) -> int:
-        """
-        Returns the total number of timesteps
+    def _save_obs(self, env_idx: int, obs: np.ndarray) -> None:
+        for key in self.keys:
+            if key is None:
+                self.buf_obs[key][env_idx] = obs
+            else:
+                raise ValueError
 
-        :return:
-        """
-        return self.total_steps
+    def _obs_from_buf(self) -> VecEnvObs:
+        return dict_to_obs(self.observation_space, copy_obs_dict(self.buf_obs))
 
-    def get_episode_rewards(self) -> List[float]:
+    def step(self, actions: np.ndarray) -> VecEnvStepReturn:
         """
-        Returns the rewards of all the episodes
+        Step the environments with the given action
 
-        :return:
+        :param actions: the action
+        :return: observation, reward, done, information
         """
-        return self.episode_rewards
+        self.actions = actions
 
-    def get_episode_lengths(self) -> List[int]:
-        """
-        Returns the number of timesteps of all the episodes
-
-        :return:
-        """
-        return self.episode_lengths
-
-    def get_episode_times(self) -> List[float]:
-        """
-        Returns the runtime in seconds of all the episodes
-
-        :return:
-        """
-        return self.episode_times
+        for env_idx in range(self.num_envs):
+            obs, self.buf_rews[env_idx], self.buf_dones[env_idx], \
+            self.buf_infos[env_idx] = self.envs[env_idx].step(
+                self.actions[env_idx]
+            )
+            if self.buf_dones[env_idx]:
+                # save final observation where user can get it, then reset
+                self.buf_infos[env_idx]["terminal_observation"] = obs
+                obs = self.envs[env_idx].reset()
+            self._save_obs(env_idx, obs)
+        return (self._obs_from_buf(), np.copy(self.buf_rews),
+                np.copy(self.buf_dones), deepcopy(self.buf_infos))
