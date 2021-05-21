@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Union, Tuple, List
+from typing import Dict, Optional, Union, Tuple, List
 
 import numpy as np
 
@@ -12,11 +12,6 @@ from .rollout import RolloutBuffer
 from .environment_wrapper import DummyVecEnv
 from .callback import BaseCallback, ProgressBarManager
 
-GymEnv = gym.Env
-GymObs = Union[Tuple, Dict[str, Any], np.ndarray, int]
-GymStepReturn = Tuple[GymObs, float, bool, Dict]
-TensorDict = Dict[str, torch.Tensor]
-OptimizerStateDict = Dict[str, Any]
 MaybeCallback = Union[ProgressBarManager, BaseCallback]
 
 
@@ -50,7 +45,7 @@ class A2C:
 
     def __init__(
         self,
-        env: GymEnv,
+        env: gym.Env,
         learning_rate: float = 7e-4,
         n_steps: int = 5,
         gamma: float = 0.99,
@@ -113,6 +108,7 @@ class A2C:
 
         self.rollout_buffer = RolloutBuffer(
             self.n_steps,
+            self.env.num_envs,
             self.observation_space,
             self.action_space,
             gamma=self.gamma,
@@ -128,7 +124,6 @@ class A2C:
             self.policy_kwargs["optimizer_kwargs"] = dict(alpha=0.99,
                                                           eps=rms_prop_eps,
                                                           weight_decay=0)
-
         self.policy = ActorCriticPolicy(
             self.observation_space,
             self.action_space,
@@ -191,7 +186,7 @@ class A2C:
         be used with the concept of rollout used in model-based RL or planning.
         :param callback: Callback that will be called at each step
             (and at the beginning and end of the rollout)
-        :return: True if function returned with at least `n_rollout_steps`
+        :return: True if function returned with at least `n_steps`
             collected, False if callback terminated rollout prematurely.
         """
         assert self._last_obs is not None, "No previous observation was provided"
@@ -242,12 +237,6 @@ class A2C:
             self,
             total_timesteps: int,
             callback: MaybeCallback = None,
-            log_interval: int = 1,
-            eval_env: Optional[GymEnv] = None,
-            eval_freq: int = -1,
-            n_eval_episodes: int = 5,
-            tb_log_name: str = "OnPolicyAlgorithm",
-            eval_log_path: Optional[str] = None,
             reset_num_timesteps: bool = True):
 
         total_timesteps, callback = self._setup_learn(
@@ -300,7 +289,7 @@ class A2C:
         # Avoid resetting the environment when calling ``.learn()`` consecutive times
         if reset_num_timesteps or self._last_obs is None:
             self._last_obs = self.env.reset()
-            self._last_dones = np.zeros((1,), dtype=bool)
+            self._last_dones = np.zeros((self.env.num_envs,), dtype=bool)
 
         # Create eval callback if needed
         if callback is not None:

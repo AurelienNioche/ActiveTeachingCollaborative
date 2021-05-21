@@ -32,23 +32,22 @@ class RolloutBuffer:
     Is only involved in policy and value function training but not action selection.
 
     :param buffer_size: Max number of element in the buffer
+    :param n_envs: Number of parallel environments
     :param observation_space: Observation space
     :param action_space: Action space
     :param gae_lambda: Factor for trade-off of bias vs variance for Generalized Advantage Estimator
         Equivalent to classic advantage when set to 1.
     :param gamma: Discount factor
-    :param n_envs: Number of parallel environments
     """
 
     def __init__(
-        self,
-        buffer_size: int,
-        observation_space: spaces.Space,
-        action_space: spaces.Space,
-        gae_lambda: float = 1,
-        gamma: float = 0.99,
-        n_envs: int = 1,
-    ):
+            self,
+            buffer_size: int,
+            n_envs: int,
+            observation_space: spaces.Space,
+            action_space: spaces.Space,
+            gae_lambda: float = 1,
+            gamma: float = 0.99):
         
         self.buffer_size = buffer_size
         self.observation_space = observation_space
@@ -117,7 +116,8 @@ class RolloutBuffer:
         self.returns = self.advantages + self.values
 
     def add(
-        self, obs: np.ndarray, action: np.ndarray, reward: np.ndarray, done: np.ndarray, value: torch.Tensor, log_prob: torch.Tensor
+            self, obs: np.ndarray, action: np.ndarray, reward: np.ndarray,
+            done: np.ndarray, value: torch.Tensor, log_prob: torch.Tensor
     ) -> None:
         """
         :param obs: Observation
