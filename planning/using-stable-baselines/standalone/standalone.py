@@ -4,7 +4,7 @@ import gym
 from gym import spaces
 
 from a2c.a2c import A2C
-from a2c.callback import ProgressBarManager
+from a2c.callback import ProgressBarCallback, ProgressBarManager
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -65,7 +65,7 @@ class Environment(gym.Env):
 def main():
 
     env = Environment(t_max=100, alpha=0.2, tau=0.9)
-    model = A2C(env, seed=123, verbose=0)
+    model = A2C(env, seed=123)
 
     iterations = env.t_max * 1000
     check_freq = env.t_max

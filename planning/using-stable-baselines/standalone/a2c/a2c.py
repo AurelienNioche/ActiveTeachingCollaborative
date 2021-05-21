@@ -10,9 +10,9 @@ from torch.nn import functional as F
 from .policy import ActorCriticPolicy
 from .rollout import RolloutBuffer
 from .environment_wrapper import DummyVecEnv
-from .callback import BaseCallback, ProgressBarManager
+from .callback import ProgressBarCallback
 
-MaybeCallback = Union[ProgressBarManager, BaseCallback]
+MaybeCallback = Union[ProgressBarCallback, None]
 
 
 class A2C:
@@ -22,7 +22,7 @@ class A2C:
     Code: This implementation borrows code from https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail and
     and Stable Baselines (https://github.com/hill-a/stable-baselines)
     Introduction to A2C: https://hackernoon.com/intuitive-rl-intro-to-advantage-actor-critic-a2c-4ff545978752
-    :param env: The environment to learn from (if registered in Gym, can be str)
+    :param env: The environment to learn from
     :param learning_rate: The learning rate, it can be a function
         of the current progress remaining (from 1 to 0)
     :param n_steps: The number of steps to run for each environment per update
@@ -53,17 +53,12 @@ class A2C:
         ent_coef: float = 0.0,
         vf_coef: float = 0.5,
         max_grad_norm: float = 0.5,
-        rms_prop_eps: float = 1e-5,
         use_rms_prop: bool = True,
         normalize_advantage: bool = False,
-        verbose: int = 0,
         seed: Optional[int] = None,
         _init_setup_model: bool = True,
         policy_kwargs: Union[Dict, None] = None,
     ):
-        # get VecNormalize object if needed
-        self.verbose = verbose
-
         self.num_timesteps = 0
         # Used for updating schedules
         self._total_timesteps = 0
@@ -75,7 +70,6 @@ class A2C:
         self._last_obs = None  # type: Optional[np.ndarray]
         self._last_dones = None  # type: Optional[np.ndarray]
         # When using VecNormalize:
-        self._last_original_obs = None  # type: Optional[np.ndarray]
         self._episode_num = 0
         # Track the training progress remaining (from 1 to 0)
         # this is used to update the learning rate
@@ -122,7 +116,7 @@ class A2C:
         if use_rms_prop:
             self.policy_kwargs["optimizer_class"] = torch.optim.RMSprop
             self.policy_kwargs["optimizer_kwargs"] = dict(alpha=0.99,
-                                                          eps=rms_prop_eps,
+                                                          eps=1e-5,
                                                           weight_decay=0)
         self.policy = ActorCriticPolicy(
             self.observation_space,
@@ -179,7 +173,7 @@ class A2C:
                                      self.max_grad_norm)
             self.policy.optimizer.step()
 
-    def collect_rollouts(self, callback: BaseCallback) -> bool:
+    def collect_rollouts(self, callback: MaybeCallback) -> bool:
         """
         Collect experiences using the current policy and fill a ``RolloutBuffer``.
         The term rollout here refers to the model-free notion and should not
@@ -192,7 +186,8 @@ class A2C:
         assert self._last_obs is not None, "No previous observation was provided"
         n_steps = 0
         self.rollout_buffer.reset()
-        callback.on_rollout_start()
+        if callback is not None:
+            callback.on_rollout_start()
 
         while n_steps < self.n_steps:
 
@@ -208,7 +203,6 @@ class A2C:
             self.num_timesteps += self.env.num_envs
 
             # Give access to local variables
-            callback.update_locals(locals())
             if callback.on_step() is False:
                 return False
 
@@ -242,7 +236,7 @@ class A2C:
         total_timesteps, callback = self._setup_learn(
             total_timesteps, callback, reset_num_timesteps)
 
-        callback.on_training_start(locals(), globals())
+        callback.on_training_start(total_timesteps)
 
         while self.num_timesteps < total_timesteps:
 
@@ -269,7 +263,7 @@ class A2C:
             total_timesteps: int,
             callback: MaybeCallback = None,
             reset_num_timesteps: bool = True,
-    ) -> Tuple[int, BaseCallback]:
+    ) -> Tuple[int, MaybeCallback]:
         """
         Initialize different variables needed for training.
         :param total_timesteps: The total number of samples (env steps) to train on
