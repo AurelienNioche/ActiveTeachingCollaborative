@@ -11,7 +11,7 @@ class ContinuousTeaching(gym.Env, ABC):
 
         self.action_space = gym.spaces.Discrete(n_item)
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
-                                                shape=(n_item, 2))
+                                                shape=(n_item*2, ))
         self.state = np.zeros((n_item, 2))
         self.obs = np.zeros((n_item, 2))
         self.n_item = n_item
@@ -26,7 +26,7 @@ class ContinuousTeaching(gym.Env, ABC):
         self.state = np.zeros((self.n_item, 2))
         self.obs = np.zeros((self.n_item, 2))
         self.t = 0
-        return self.obs
+        return self.obs.flatten()
 
     def step(self, action):
         self.state[:, 0] += 1  # delta + 1 for all
@@ -50,4 +50,4 @@ class ContinuousTeaching(gym.Env, ABC):
 
         info = {}
         self.t += 1
-        return self.obs, reward, done, info
+        return self.obs.flatten(), reward, done, info
