@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Type, Union, Tuple, List, Callable
+from typing import Any, Dict, Optional, Type, Union, Tuple, List
 from functools import partial
 
 import numpy as np
@@ -11,10 +11,6 @@ from gym import spaces
 
 from . nn import MlpExtractor
 from . distribution import CategoricalDistribution
-
-# A schedule takes the remaining progress as input
-# and ouputs a scalar (e.g. learning rate, clip range, ...)
-Schedule = Callable[[float], float]
 
 
 class FlattenExtractor(nn.Module):
@@ -45,7 +41,7 @@ class ActorCriticPolicy(nn.Module):
 
     :param observation_space: Observation space
     :param action_space: Action space
-    :param lr_schedule: Learning rate schedule (could be constant)
+    :param lr: Learning rate
     :param net_arch: The specification of the policy and value networks.
     :param activation_fn: Activation function
     :param ortho_init: Whether to use or not orthogonal initialization
@@ -56,15 +52,15 @@ class ActorCriticPolicy(nn.Module):
     """
 
     def __init__(
-        self,
-        observation_space: gym.spaces.Space,
-        action_space: gym.spaces.Space,
-        lr: float,
-        net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
-        activation_fn: Type[nn.Module] = nn.Tanh,
-        ortho_init: bool = True,
-        optimizer_class: Type[torch.optim.Optimizer] = torch.optim.Adam,
-        optimizer_kwargs: Optional[Dict[str, Any]] = None):
+            self,
+            observation_space: gym.spaces.Space,
+            action_space: gym.spaces.Space,
+            lr: float,
+            net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
+            activation_fn: Type[nn.Module] = nn.Tanh,
+            ortho_init: bool = True,
+            optimizer_class: Type[torch.optim.Optimizer] = torch.optim.Adam,
+            optimizer_kwargs: Optional[Dict[str, Any]] = None):
         super().__init__()
 
         self.observation_space = observation_space

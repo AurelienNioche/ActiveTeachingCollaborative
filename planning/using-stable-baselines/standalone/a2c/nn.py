@@ -1,7 +1,8 @@
-import torch
-from torch import nn
 from typing import Dict, Type, Union, Tuple, List
 from itertools import zip_longest
+
+import torch
+from torch import nn
 
 
 class MlpExtractor(nn.Module):

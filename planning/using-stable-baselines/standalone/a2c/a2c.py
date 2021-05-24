@@ -33,12 +33,9 @@ class A2C:
     :param ent_coef: Entropy coefficient for the loss calculation
     :param vf_coef: Value function coefficient for the loss calculation
     :param max_grad_norm: The maximum value for the gradient clipping
-    :param rms_prop_eps: RMSProp epsilon. It stabilizes square root computation in denominator
-        of RMSProp update
     :param use_rms_prop: Whether to use RMSprop (default) or Adam as optimizer
     :param normalize_advantage: Whether to normalize or not the advantage
     :param policy_kwargs: additional arguments to be passed to the policy on creation
-    :param verbose: the verbosity level: 0 no output, 1 info, 2 debug
     :param seed: Seed for the pseudo random generators
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
     """
@@ -102,9 +99,8 @@ class A2C:
 
         self.rollout_buffer = RolloutBuffer(
             self.n_steps,
-            self.env.num_envs,
-            self.observation_space,
-            self.action_space,
+            obs_shape=self.observation_space.shape,
+            action_dim=len(self.action_space.shape),
             gamma=self.gamma,
             gae_lambda=self.gae_lambda)
 
@@ -114,6 +110,9 @@ class A2C:
             policy_kwargs = {}
         self.policy_kwargs = policy_kwargs
         if use_rms_prop:
+            # `eps`: RMSProp epsilon:
+            # it stabilizes square root computation in denominator
+            # of RMSProp update
             self.policy_kwargs["optimizer_class"] = torch.optim.RMSprop
             self.policy_kwargs["optimizer_kwargs"] = dict(alpha=0.99,
                                                           eps=1e-5,
@@ -133,45 +132,45 @@ class A2C:
         self._update_learning_rate(self.policy.optimizer)
 
         # This will only loop once (get all data in one go)
-        for rollout_data in self.rollout_buffer.get(batch_size=None):
+        rollout_data = self.rollout_buffer.get()
 
-            actions = rollout_data.actions
-            # Convert discrete action from float to long
-            actions = actions.long().flatten()
+        actions = rollout_data.actions
+        # Convert discrete action from float to long
+        actions = actions.long().flatten()
 
-            # TODO: avoid second computation of everything because of the gradient
-            values, log_prob, entropy = self.policy.evaluate_actions(
-                rollout_data.observations, actions)
-            values = values.flatten()
+        # TODO: avoid second computation of everything because of the gradient
+        values, log_prob, entropy = self.policy.evaluate_actions(
+            rollout_data.observations, actions)
+        values = values.flatten()
 
-            # Normalize advantage (not present in the original implementation)
-            advantages = rollout_data.advantages
-            if self.normalize_advantage:
-                advantages = \
-                    (advantages - advantages.mean()) \
-                    / (advantages.std() + 1e-8)
+        # Normalize advantage (not present in the original implementation)
+        advantages = rollout_data.advantages
+        if self.normalize_advantage:
+            advantages = \
+                (advantages - advantages.mean()) \
+                / (advantages.std() + 1e-8)
 
-            # Policy gradient loss
-            policy_loss = -(advantages * log_prob).mean()
+        # Policy gradient loss
+        policy_loss = -(advantages * log_prob).mean()
 
-            # Value loss using the TD(gae_lambda) target
-            value_loss = F.mse_loss(rollout_data.returns, values)
+        # Value loss using the TD(gae_lambda) target
+        value_loss = F.mse_loss(rollout_data.returns, values)
 
-            # Entropy loss favor exploration
-            entropy_loss = -torch.mean(entropy)
+        # Entropy loss favor exploration
+        entropy_loss = -torch.mean(entropy)
 
-            loss = policy_loss \
-                + self.ent_coef * entropy_loss \
-                + self.vf_coef * value_loss
+        loss = policy_loss \
+            + self.ent_coef * entropy_loss \
+            + self.vf_coef * value_loss
 
-            # Optimization step
-            self.policy.optimizer.zero_grad()
-            loss.backward()
+        # Optimization step
+        self.policy.optimizer.zero_grad()
+        loss.backward()
 
-            # Clip grad norm
-            nn.utils.clip_grad_norm_(self.policy.parameters(),
-                                     self.max_grad_norm)
-            self.policy.optimizer.step()
+        # Clip grad norm
+        nn.utils.clip_grad_norm_(self.policy.parameters(),
+                                 self.max_grad_norm)
+        self.policy.optimizer.step()
 
     def collect_rollouts(self, callback: MaybeCallback) -> bool:
         """
@@ -209,8 +208,8 @@ class A2C:
             n_steps += 1
 
             actions = actions.reshape(-1, 1)
-            self.rollout_buffer.add(self._last_obs, actions, rewards,
-                                    self._last_dones,
+            self.rollout_buffer.add(self._last_obs[0], actions[0], rewards[0],
+                                    self._last_dones[0],
                                     values, log_probs)
             self._last_obs = new_obs
             self._last_dones = dones

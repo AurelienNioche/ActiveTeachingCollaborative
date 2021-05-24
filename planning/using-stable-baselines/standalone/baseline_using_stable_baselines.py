@@ -140,7 +140,7 @@ def main():
     check_freq = env.t_max
 
     with ProgressBarManager(iterations, env, check_freq) as callback:
-        model = model.learn(iterations, callback=callback)
+        model.learn(iterations, callback=callback)
 
     plt.plot([np.mean(r) for r in callback.hist_rewards])
     plt.show()
@@ -148,3 +148,21 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# import gym
+#
+# from stable_baselines3 import A2C
+#
+# env = gym.make('CartPole-v1')
+#
+# model = A2C('MlpPolicy', env, verbose=1)
+# model.learn(total_timesteps=10000)
+#
+# obs = env.reset()
+# for i in range(1000):
+#     action, _state = model.predict(obs, deterministic=True)
+#     obs, reward, done, info = env.step(action)
+#     env.render()
+#     if done:
+#         obs = env.reset()
