@@ -31,14 +31,12 @@ class RolloutBuffer:
             self,
             buffer_size: int,
             obs_shape: tuple,
-            action_dim: int,
             gae_lambda: float = 1,
             gamma: float = 0.99):
         
         self.buffer_size = buffer_size
 
         self.obs_shape = obs_shape
-        self.action_dim = action_dim
 
         self.pos = 0
         self.full = False
@@ -88,8 +86,8 @@ class RolloutBuffer:
         if self.pos == self.buffer_size:
             self.full = True
 
-    def compute_returns_and_advantage(self, last_values: torch.Tensor,
-                                      dones: np.ndarray) -> None:
+    def compute_returns_and_advantage(self, last_value: torch.Tensor,
+                                      done: np.ndarray) -> None:
         """
         Post-processing step: compute the returns (sum of discounted rewards)
         and GAE advantage.
@@ -100,18 +98,18 @@ class RolloutBuffer:
         where R is the discounted reward with value bootstrap,
         set ``gae_lambda=1.0`` during initialization.
 
-        :param last_values:
-        :param dones:
+        :param last_value: tensor with unique element
+        :param done: tensor with unique element
 
         """
         # convert to numpy
-        last_values = last_values.clone().cpu().numpy().flatten()
+        last_value = last_value.numpy()
 
         last_gae_lam = 0
         for step in reversed(range(self.buffer_size)):
             if step == self.buffer_size - 1:
-                next_non_terminal = 1.0 - dones
-                next_values = last_values
+                next_non_terminal = 1.0 - done
+                next_values = last_value
             else:
                 next_non_terminal = 1.0 - self.dones[step + 1]
                 next_values = self.values[step + 1]

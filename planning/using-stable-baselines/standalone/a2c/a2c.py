@@ -9,7 +9,6 @@ from torch.nn import functional as F
 
 from .policy import ActorCriticPolicy
 from .rollout import RolloutBuffer
-from .environment_wrapper import DummyVecEnv
 from .callback import ProgressBarCallback
 
 MaybeCallback = Union[ProgressBarCallback, None]
@@ -64,19 +63,17 @@ class A2C:
 
         self.learning_rate = learning_rate
 
-        self._last_obs = None  # type: Optional[np.ndarray]
-        self._last_dones = None  # type: Optional[np.ndarray]
-        # When using VecNormalize:
-        self._episode_num = 0
         # Track the training progress remaining (from 1 to 0)
         # this is used to update the learning rate
         self._current_progress_remaining = 1
 
-        # Wrap the env
-        self.env = DummyVecEnv(env)
-
+        self.env = env
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
+
+        self._last_obs = np.zeros((1, *self.env.observation_space.shape),
+                                  dtype=np.float32)  # type: np.ndarray
+        self._last_done = False  # type: bool
 
         self.n_steps = n_steps
         self.gamma = gamma
@@ -100,7 +97,6 @@ class A2C:
         self.rollout_buffer = RolloutBuffer(
             self.n_steps,
             obs_shape=self.observation_space.shape,
-            action_dim=len(self.action_space.shape),
             gamma=self.gamma,
             gae_lambda=self.gae_lambda)
 
@@ -122,6 +118,9 @@ class A2C:
             self.action_space,
             self.learning_rate,
             **self.policy_kwargs)
+
+        self.buf_obs = np.zeros((1, *env.observation_space.shape),
+                                dtype=np.float32)
 
     def train(self) -> None:
         """
@@ -183,45 +182,45 @@ class A2C:
             collected, False if callback terminated rollout prematurely.
         """
         assert self._last_obs is not None, "No previous observation was provided"
-        n_steps = 0
+
         self.rollout_buffer.reset()
         if callback is not None:
             callback.on_rollout_start()
 
-        while n_steps < self.n_steps:
+        for _ in range(self.n_steps):
 
             with torch.no_grad():
                 # Convert to pytorch tensor
                 obs_tensor = torch.as_tensor(self._last_obs)
-                actions, values, log_probs = self.policy.forward(obs_tensor)
-            actions = actions.cpu().numpy()
+                action, value, log_prob = self.policy.forward(obs_tensor)
+            action = action.numpy()
 
             # Perform action
-            new_obs, rewards, dones, infos = self.env.step(actions)
+            new_obs, reward, done, _ = self.env.step(action)
+            if done:
+                new_obs = self.env.reset()
 
-            self.num_timesteps += self.env.num_envs
+            self.buf_obs[0] = new_obs
 
-            # Give access to local variables
+            self.num_timesteps += 1
+
             if callback.on_step() is False:
                 return False
 
-            n_steps += 1
-
-            actions = actions.reshape(-1, 1)
-            self.rollout_buffer.add(self._last_obs[0], actions[0], rewards[0],
-                                    self._last_dones[0],
-                                    values, log_probs)
-            self._last_obs = new_obs
-            self._last_dones = dones
+            self.rollout_buffer.add(self._last_obs[0], action, reward,
+                                    self._last_done,
+                                    value, log_prob)
+            self._last_obs = self.buf_obs.copy()
+            self._last_done = done
 
         with torch.no_grad():
             # Compute value for the last timestep
-            obs_tensor = torch.as_tensor(new_obs)
-            _, values, _ = self.policy.forward(obs_tensor)
+            obs_tensor = torch.as_tensor(self._last_obs)
+            _, value, _ = self.policy.forward(obs_tensor)
 
         self.rollout_buffer.compute_returns_and_advantage(
-            last_values=values,
-            dones=dones)
+            last_value=value,
+            done=self._last_done)
 
         callback.on_rollout_end()
         return True
@@ -249,7 +248,6 @@ class A2C:
             self.train()
 
         callback.on_training_end()
-
         return self
 
     def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
@@ -273,16 +271,16 @@ class A2C:
 
         if reset_num_timesteps:
             self.num_timesteps = 0
-            self._episode_num = 0
+
         else:
             # Make sure training timesteps are ahead of the internal counter
             total_timesteps += self.num_timesteps
         self._total_timesteps = total_timesteps
 
         # Avoid resetting the environment when calling ``.learn()`` consecutive times
-        if reset_num_timesteps or self._last_obs is None:
-            self._last_obs = self.env.reset()
-            self._last_dones = np.zeros((self.env.num_envs,), dtype=bool)
+        if reset_num_timesteps:
+            self._last_obs[0] = self.env.reset()
+            self._last_done = False
 
         # Create eval callback if needed
         if callback is not None:
