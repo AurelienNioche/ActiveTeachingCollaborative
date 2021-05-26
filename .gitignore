@@ -144,9 +144,9 @@ build/
 model2param
 model2paramIncmp
 modelXPdata
-model
 model2
 
 *.hpp
 
 */checkpoints
+/inference/norm-flow/minibatch/fig/

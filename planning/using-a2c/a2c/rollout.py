@@ -21,7 +21,6 @@ class RolloutBuffer:
 
     :param buffer_size: Max number of element in the buffer
     :param obs_shape: Shape of one observation
-    :param action_dim: Number of dimensions of the action space
     :param gae_lambda: Factor for trade-off of bias vs variance for Generalized Advantage Estimator
         Equivalent to classic advantage when set to 1.
     :param gamma: Discount factor
