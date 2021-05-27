@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch import optim
 from tqdm.autonotebook import tqdm
 
@@ -6,19 +7,25 @@ from . plannar import NormalizingFlow
 from . loss import LossTeaching
 
 
-def train(x, y, r, u, w, n_u, n_w,
-          flow_length=16, epochs=10000, initial_lr=0.01, batch_size=40,
-          freq_update_loss=50):
+def train(x, y, r, u, w,
+          flow_length=16, epochs=10000, initial_lr=0.01, n_sample=40,
+          freq_update_loss=10):
+
+    n_u = len(np.unique(u))
+    n_w = len(np.unique(w))
+
+    x = torch.from_numpy(x.reshape(-1, 1))
+    y = torch.from_numpy(y.reshape(-1, 1))
+    r = torch.from_numpy(r.reshape(-1, 1))
 
     z_flow = NormalizingFlow(dim=(n_u + n_w) * 2, flow_length=flow_length)
     theta_flow = NormalizingFlow(6, flow_length=flow_length)
 
-    loss_func = LossTeaching(x=x, y=y, r=r, u=u, w=w, n_u=n_u, n_w=n_w)
+    loss_func = LossTeaching()
 
     optimizer = optim.Adam(
         list(z_flow.parameters()) + list(theta_flow.parameters()),
         lr=initial_lr)
-    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, lr_decay)
 
     hist_loss = np.zeros(epochs)
 
@@ -29,10 +36,16 @@ def train(x, y, r, u, w, n_u, n_w,
             optimizer.zero_grad()
             loss = loss_func(z_flow=z_flow,
                              theta_flow=theta_flow,
-                             batch_size=batch_size)
+                             n_sample=n_sample,
+                             n_u=n_u,
+                             n_w=n_w,
+                             u=u,
+                             w=w,
+                             x=x,
+                             y=y,
+                             r=r)
             loss.backward()
             optimizer.step()
-            # scheduler.step()
 
             hist_loss[i] = loss.item()
 

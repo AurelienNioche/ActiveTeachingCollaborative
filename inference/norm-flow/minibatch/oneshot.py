@@ -4,14 +4,13 @@ from simulate.simulate import simulate
 from inference.plannar import NormalizingFlow
 
 
-
 def main():
 
     data, truth = simulate()
     z_flow, theta_flow, hist_loss = train(
         **data,
         freq_update_loss=5,
-        batch_size=40,
+        n_sample=40,
         epochs=5000)
     z_flow.save("z_flow_artificial")
     theta_flow.save("theta_flow_artificial")

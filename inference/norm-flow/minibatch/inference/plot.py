@@ -26,7 +26,7 @@ def plot_loss(hist_loss, zoom_start=1000, name=""):
 def plot_posterior(theta_flow, batch_size=1000, truth=None,
                    name=""):
 
-    z0_θ = theta_flow.sample_prior(batch_size)
+    z0_θ = theta_flow.sample_base_dist(batch_size)
     zk_θ, prior_logprob_θ, log_det_θ = theta_flow(z0_θ)
 
     mu1, log_var_u1, log_var_w1 = zk_θ.data[:, :3].T

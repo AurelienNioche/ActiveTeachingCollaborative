@@ -39,8 +39,7 @@ def simulate(
     p = np.exp(neg_rate)
     y[:] = p > rd
 
-    data = {'n_u': n_u, 'n_w': n_w,
-            'u': u, 'w': w,
+    data = {'u': u, 'w': w,
             'x': x, 'r': r,
             'y': y}
 

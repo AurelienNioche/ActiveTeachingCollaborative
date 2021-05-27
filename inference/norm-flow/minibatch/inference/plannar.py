@@ -35,7 +35,7 @@ class NormalizingFlow(nn.Module):
         self.mu = nn.Parameter(torch.zeros(dim).uniform_(-0.01, 0.01))
         self.log_var = nn.Parameter(torch.zeros(dim).uniform_(-0.01, 0.01))
 
-    def sample_prior(self, batch_size):
+    def sample_base_dist(self, batch_size):
         std = torch.exp(0.5 * self.log_var)
         eps = torch.randn((batch_size, self.dim))
         return self.mu + eps * std
