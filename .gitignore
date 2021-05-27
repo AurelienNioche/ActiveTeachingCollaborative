@@ -150,3 +150,4 @@ model2
 
 */checkpoints
 /inference/norm-flow/minibatch/fig/
+/inference/norm-flow/minibatch/artificial_mini_batch_loss.pdf
