@@ -8,8 +8,8 @@ from . loss import LossTeaching
 
 
 def train(x, y, r, u, w,
-          flow_length=16, epochs=10000, initial_lr=0.01, n_sample=40,
-          freq_update_loss=10):
+          flow_length=16, epochs=5000, initial_lr=0.01, n_sample=40,
+          freq_update_loss=1):
 
     n_u = len(np.unique(u))
     n_w = len(np.unique(w))

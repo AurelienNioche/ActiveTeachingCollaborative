@@ -40,24 +40,22 @@ class NormalizingFlow(nn.Module):
         eps = torch.randn((batch_size, self.dim))
         return self.mu + eps * std
 
-    def log_prob_prior(self, x):
+    def log_prob_base_dist(self, x):
         std = torch.exp(0.5 * self.log_var)
         return dist.Normal(self.mu, std).log_prob(x).sum(axis=-1)
 
     def forward(self, x):
         batch_size = x.shape[0]
 
-        prior_logp = self.log_prob_prior(x)
+        log_prob_base_dist = self.log_prob_base_dist(x)
 
         log_jacobians = torch.zeros((self.flow_length, batch_size, 1))
 
-        for i, transform, log_jacobian in zip(range(self.flow_length),
-                                              self.transforms,
-                                              self.log_jacobians):
-            log_jacobians[i] = log_jacobian(x)
-            x = transform(x)
+        for i in range(self.flow_length):
+            log_jacobians[i] = self.log_jacobians[i](x)
+            x = self.transforms[i](x)
 
-        return x, prior_logp, log_jacobians
+        return x, log_prob_base_dist, log_jacobians
 
     def save(self, name):
         path = os.path.join(self.BKP_DIR, name)

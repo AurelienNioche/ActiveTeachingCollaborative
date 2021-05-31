@@ -7,27 +7,11 @@ FIG_DIR = "fig"
 os.makedirs(FIG_DIR, exist_ok=True)
 
 
-def plot_loss(hist_loss, zoom_start=1000, name=""):
-    fig, axes = plt.subplots(ncols=2, figsize=(10, 5))
-    ax = axes[0]
-    ax.plot(hist_loss)
-    ax.set_xlabel("epoch")
-    ax.set_ylabel("loss")
-
-    ax = axes[1]
-    ax.plot(np.arange(len(hist_loss))[-zoom_start:], hist_loss[-zoom_start:])
-    ax.set_xlabel("epoch")
-    ax.set_ylabel("loss")
-
-    fig.tight_layout()
-    plt.savefig(os.path.join(FIG_DIR, f"{name}_loss.pdf"))
-
-
 def plot_posterior(theta_flow, batch_size=1000, truth=None,
                    name=""):
 
     z0_θ = theta_flow.sample_base_dist(batch_size)
-    zk_θ, prior_logprob_θ, log_det_θ = theta_flow(z0_θ)
+    zk_θ, base_dist_logprob_θ, log_det_θ = theta_flow(z0_θ)
 
     mu1, log_var_u1, log_var_w1 = zk_θ.data[:, :3].T
     mu2, log_var_u2, log_var_w2 = zk_θ.data[:, 3:].T

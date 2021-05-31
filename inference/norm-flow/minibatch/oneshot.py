@@ -1,7 +1,8 @@
 from inference.train import train
-from inference.plot import plot_loss, plot_posterior
-from simulate.simulate import simulate
 from inference.plannar import NormalizingFlow
+from simulate.simulate import simulate
+from plot.plot_hist_loss import plot_loss
+from plot.plot_posterior import plot_posterior
 
 
 def main():
@@ -9,7 +10,7 @@ def main():
     data, truth = simulate()
     z_flow, theta_flow, hist_loss = train(
         **data,
-        freq_update_loss=5,
+        freq_update_loss=1,
         n_sample=40,
         epochs=5000)
     z_flow.save("z_flow_artificial")
