@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.special import expit
+import torch
 
 
 def simulate(
@@ -9,7 +10,8 @@ def simulate(
         mu=(-4., -2.),
         n_u=20,
         n_w=20,
-        n_obs_per_wu=100):
+        n_obs_per_wu=100,
+        use_torch=False):
 
     np.random.seed(seed)
     n_obs = n_obs_per_wu * n_u * n_w
@@ -49,4 +51,39 @@ def simulate(
     truth = {'mu': mu, 'sg_u': sg_u, 'sg_w': sg_w,
              'mu_smp': mu_smp, 'sg_u_smp': sg_u_smp, 'sg_w_smp': sg_w_smp}
 
+    if use_torch:
+        data = {
+            'x': torch.from_numpy(data['x'].reshape(-1, 1)),
+            'y': torch.from_numpy(data['y'].reshape(-1, 1)),
+            'r': torch.from_numpy(data['r'].reshape(-1, 1)),
+            'u': data['u'],
+            'w': data['w']}
+
     return data, truth
+
+# Using pytorch objets...
+#
+# class TeachingDataset(Dataset):
+#     def __init__(self, u, w, x, r, y):
+#         super().__init__()
+#         self.x = torch.from_numpy(x.reshape(-1, 1))
+#         self.y = torch.from_numpy(y.reshape(-1, 1))
+#         self.r = torch.from_numpy(r.reshape(-1, 1))
+#         self.u = u
+#         self.w = w
+#
+#         self.n_u = len(np.unique(u))
+#         self.n_w = len(np.unique(w))
+#         self.n_obs = len(self.u)
+#
+#     def __len__(self):
+#         return self.n_obs
+#
+#     def __getitem__(self, idx):
+#         return {'x': self.x[idx],
+#                 'y': self.y[idx],
+#                 'r': self.r[idx],
+#                 'u': self.u[idx],
+#                 'w': self.w[idx]}
+# training_data = TeachingDataset(**data_dict)
+# dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)

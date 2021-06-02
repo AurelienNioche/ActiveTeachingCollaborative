@@ -7,10 +7,9 @@ from plot.plot_posterior import plot_posterior
 
 def main():
 
-    data, truth = simulate()
+    data, truth = simulate(use_torch=True)
     z_flow, theta_flow, hist_loss = train(
-        **data,
-        freq_update_loss=1,
+        data,
         n_sample=40,
         epochs=5000)
     z_flow.save("z_flow_artificial")

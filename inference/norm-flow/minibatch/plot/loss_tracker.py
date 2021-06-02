@@ -11,7 +11,7 @@ class LossTracker:
 
     def __init__(self, total, online_plot=False,
                  online_plot_freq_update=None,
-                 online_plot_max_n = None):
+                 online_plot_max_n=None):
 
         if online_plot:
             if online_plot_freq_update is None:
@@ -38,8 +38,9 @@ class LossTracker:
         if self.online_plot:
             self.fig, self.ax = plt.subplots()
             self.line, = self.ax.plot([], [])
-            self.hdisplay = display.display(None, display_id=True)
+            self.hdisplay = display.display((), display_id=True)
             if self.hdisplay is None:
+                # not using notebook
                 self.fig.canvas.draw()
                 self.fig.canvas.flush_events()
         self.pbar = tqdm(total=self.total)
@@ -58,7 +59,8 @@ class LossTracker:
 
         if self.online_plot \
                 and self.i > 0 \
-                and self.online_plot_freq_update % self.i == 0:
+                and self.i % self.online_plot_freq_update == 0:
+
             x = np.arange(len(self.hist_loss))
             y = self.hist_loss
             n = len(x)
@@ -75,7 +77,11 @@ class LossTracker:
             if self.hdisplay is not None:
                 self.hdisplay.update(self.fig)
             else:
-                self.fig.canvas.draw()
+                try:
+                    self.fig.canvas.draw()
+                    self.fig.canvas.flush_events()
+                except:
+                    pass
 
         self.pbar.update()
         self.pbar.set_postfix({'loss': f'{self.hist_loss[-1]:.3f}'})
@@ -99,4 +105,4 @@ if __name__ == "__main__":
                 dp.append(np.random.random())
 
             dp.update()
-            time.sleep(1)
+            time.sleep(0.1)

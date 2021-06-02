@@ -7,16 +7,18 @@ from . plannar import NormalizingFlow
 from . loss import LossTeaching
 
 
-def train(x, y, r, u, w,
-          flow_length=16, epochs=5000, initial_lr=0.01, n_sample=40,
-          freq_update_loss=1):
+def train(data,
+          flow_length=16,
+          epochs=5000,
+          initial_lr=0.01,
+          n_sample=40,
+          seed=123):
 
-    n_u = len(np.unique(u))
-    n_w = len(np.unique(w))
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
-    x = torch.from_numpy(x.reshape(-1, 1))
-    y = torch.from_numpy(y.reshape(-1, 1))
-    r = torch.from_numpy(r.reshape(-1, 1))
+    n_u = len(np.unique(data['u']))
+    n_w = len(np.unique(data['w']))
 
     z_flow = NormalizingFlow(dim=(n_u + n_w) * 2, flow_length=flow_length)
     theta_flow = NormalizingFlow(6, flow_length=flow_length)
@@ -27,7 +29,7 @@ def train(x, y, r, u, w,
         list(z_flow.parameters()) + list(theta_flow.parameters()),
         lr=initial_lr)
 
-    hist_loss = np.zeros(epochs)
+    hist_loss = []
 
     with tqdm(total=epochs) as pbar:
 
@@ -39,19 +41,14 @@ def train(x, y, r, u, w,
                              n_sample=n_sample,
                              n_u=n_u,
                              n_w=n_w,
-                             u=u,
-                             w=w,
-                             x=x,
-                             y=y,
-                             r=r)
+                             **data)
             loss.backward()
             optimizer.step()
 
-            hist_loss[i] = loss.item()
+            hist_loss.append(loss.item())
 
-            if i % freq_update_loss == 0 and i > 0:
-                pbar.set_postfix(
-                    {'loss': np.mean(hist_loss[i - freq_update_loss:i])})
+            if i > 0:
+                pbar.set_postfix({'loss': hist_loss[-1]})
             pbar.update()
 
     return z_flow, theta_flow, hist_loss
