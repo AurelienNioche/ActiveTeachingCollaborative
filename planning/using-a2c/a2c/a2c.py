@@ -1,20 +1,47 @@
-from typing import Dict, Optional, Union, Tuple, List
+import os
+from typing import Any, Dict, Optional, Union, Tuple, List, Type
+from functools import partial
 
 import numpy as np
 
 import torch
 from torch import nn
-import gym
 from torch.nn import functional as F
 
-from .policy import ActorCriticPolicy
-from .rollout import RolloutBuffer
-from .callback import ProgressBarCallback
+import gym
+from gym import spaces
+
+from . nn import MlpExtractor
+from . distribution import CategoricalDistribution
+
+from . rollout import RolloutBuffer
+from . callback import ProgressBarCallback
 
 MaybeCallback = Union[ProgressBarCallback, None]
 
 
-class A2C:
+class FlattenExtractor(nn.Module):
+    """
+    Feature extract that flatten the input.
+    Used as a placeholder when feature extraction is not needed.
+
+    :param observation_space:
+    """
+
+    def __init__(self, observation_space: gym.Space):
+        super().__init__()
+
+        self._observation_space = observation_space
+        self.features_dim = spaces.utils.flatdim(observation_space)
+        assert self.features_dim > 0
+
+        self.flatten = nn.Flatten()
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        return self.flatten(observations)
+
+
+class A2C(nn.Module):
     """
     Advantage Actor Critic (A2C)
     Paper: https://arxiv.org/abs/1602.01783
@@ -22,8 +49,12 @@ class A2C:
     and Stable Baselines (https://github.com/hill-a/stable-baselines)
     Introduction to A2C: https://hackernoon.com/intuitive-rl-intro-to-advantage-actor-critic-a2c-4ff545978752
     :param env: The environment to learn from
-    :param learning_rate: The learning rate, it can be a function
-        of the current progress remaining (from 1 to 0)
+    :param learning_rate: The learning rate
+    :param constant_lr: Constant learning rate (yes or no)
+    :param optimizer_name: The name of the optimizer to use,
+        ``torch.optim.RMSprop`` ('RMSprop') by default
+    :param optimizer_kwargs: Additional keyword arguments,
+        excluding the learning rate, to pass to the optimizer
     :param n_steps: The number of steps to run for each environment per update
         (i.e. batch size is n_steps * n_env where n_env is number of environment copies running in parallel)
     :param gamma: Discount factor
@@ -32,29 +63,35 @@ class A2C:
     :param ent_coef: Entropy coefficient for the loss calculation
     :param vf_coef: Value function coefficient for the loss calculation
     :param max_grad_norm: The maximum value for the gradient clipping
-    :param use_rms_prop: Whether to use RMSprop (default) or Adam as optimizer
     :param normalize_advantage: Whether to normalize or not the advantage
-    :param policy_kwargs: additional arguments to be passed to the policy on creation
+    :param net_arch: The specification of the policy and value networks.
+    :param activation_fn: Activation function
+    :param ortho_init: Whether to use or not orthogonal initialization
     :param seed: Seed for the pseudo random generators
-    :param _init_setup_model: Whether or not to build the network at the creation of the instance
     """
 
     def __init__(
         self,
         env: gym.Env,
         learning_rate: float = 7e-4,
+        constant_lr: bool = False,
+        optimizer_name: str = "RMSprop",
+        optimizer_kwargs: dict = None,
         n_steps: int = 5,
         gamma: float = 0.99,
         gae_lambda: float = 1.0,
         ent_coef: float = 0.0,
         vf_coef: float = 0.5,
         max_grad_norm: float = 0.5,
-        use_rms_prop: bool = True,
         normalize_advantage: bool = False,
-        seed: Optional[int] = None,
-        _init_setup_model: bool = True,
-        policy_kwargs: Union[Dict, None] = None,
+        net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
+        activation_fn_name: str = "Tanh",
+        ortho_init: bool = True,
+        seed: int = 123,
     ):
+
+        super().__init__()
+
         self.num_timesteps = 0
         # Used for updating schedules
         self._total_timesteps = 0
@@ -72,8 +109,8 @@ class A2C:
         self.action_space = self.env.action_space
 
         self._last_obs = np.zeros((1, *self.env.observation_space.shape),
-                                  dtype=np.float32)  # type: np.ndarray
-        self._last_done = False  # type: bool
+                                  dtype=np.float32)
+        self._last_done = False
 
         self.n_steps = n_steps
         self.gamma = gamma
@@ -84,7 +121,8 @@ class A2C:
 
         self.normalize_advantage = normalize_advantage
 
-        self.lr_schedule = lambda _: self.learning_rate
+        # Constant learning rate
+        self.constant_lr = constant_lr
 
         # Seed numpy RNG
         np.random.seed(seed)
@@ -100,35 +138,85 @@ class A2C:
             gamma=self.gamma,
             gae_lambda=self.gae_lambda)
 
-        # Update optimizer inside the policy if we want to use RMSProp
-        # (original implementation) rather than Adam
-        if policy_kwargs is None:
-            policy_kwargs = {}
-        self.policy_kwargs = policy_kwargs
-        if use_rms_prop:
-            # `eps`: RMSProp epsilon:
-            # it stabilizes square root computation in denominator
-            # of RMSProp update
-            self.policy_kwargs["optimizer_class"] = torch.optim.RMSprop
-            self.policy_kwargs["optimizer_kwargs"] = dict(alpha=0.99,
-                                                          eps=1e-5,
-                                                          weight_decay=0)
-        self.policy = ActorCriticPolicy(
-            self.observation_space,
-            self.action_space,
-            self.learning_rate,
-            **self.policy_kwargs)
+        # Default network architecture, from stable-baselines
+        if net_arch is None:
+            net_arch = [dict(pi=[64, 64], vf=[64, 64])]
+        self.net_arch = net_arch                      # for saving
+        self.activation_fn_name = activation_fn_name  # for saving
+        activation_fn = getattr(torch.nn, activation_fn_name)
+        self.ortho_init = ortho_init
+
+        # Action distribution
+        self.action_dist = CategoricalDistribution(self.action_space.n)
+
+        self.features_extractor = FlattenExtractor(self.observation_space)
+        features_dim = self.features_extractor.features_dim
+
+        self.mlp_extractor = MlpExtractor(
+            features_dim,
+            net_arch=self.net_arch,
+            activation_fn=activation_fn)
+
+        latent_dim_pi = self.mlp_extractor.latent_dim_pi
+        self.action_net = self.action_dist.proba_distribution_net(
+            latent_dim=latent_dim_pi)
+
+        self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
+        # Init weights: use orthogonal initialization
+        # with small initial weight for the output
+        if self.ortho_init:  # true by defaut
+            # Values from stable-baselines.
+            # features_extractor/mlp values are
+            # originally from openai/baselines (default gains/init_scales).
+            module_gains = {
+                self.features_extractor: np.sqrt(2),
+                self.mlp_extractor: np.sqrt(2),
+                self.action_net: 0.01,
+                self.value_net: 1,
+            }
+            for module, gain in module_gains.items():
+                module.apply(partial(self.init_weights, gain=gain))
+
+        # `eps`: RMSProp epsilon:
+        # it stabilizes square root computation in denominator
+        # of RMSProp update
+        optimizer_class = getattr(torch.optim, optimizer_name)
+        if optimizer_name == 'RMSprop':
+            default_optimizer_kwargs = dict(alpha=0.99, eps=1e-5, weight_decay=0)
+        else:
+            default_optimizer_kwargs = dict(eps=1e-5)
+        if optimizer_kwargs is not None:
+            default_optimizer_kwargs.update(optimizer_kwargs)
+        optimizer_kwargs = default_optimizer_kwargs
+
+        self.optimizer_name = optimizer_name      # for saving
+        self.optimizer_kwargs = optimizer_kwargs  # for saving
+        self.optimizer = optimizer_class(
+            self.parameters(),
+            lr=self.learning_rate, **self.optimizer_kwargs)
 
         self.buf_obs = np.zeros((1, *env.observation_space.shape),
                                 dtype=np.float32)
 
-    def train(self) -> None:
+    @staticmethod
+    def init_weights(module: nn.Module, gain: float = 1) -> None:
+        """
+        Orthogonal initialization (used in PPO and A2C)
+        """
+        if isinstance(module, (nn.Linear, nn.Conv2d)):
+            nn.init.orthogonal_(module.weight, gain=gain)
+            if module.bias is not None:
+                module.bias.data.fill_(0.0)
+
+    def update_policy(self) -> None:
         """
         Update policy using the currently gathered
         rollout buffer (one gradient step over whole data).
         """
-        # Update optimizer learning rate
-        self._update_learning_rate(self.policy.optimizer)
+        # Maybe maintain constant the learning rate
+        if self.constant_lr:
+            for param_group in self.optimizer.param_groups:
+                param_group["lr"] = self.learning_rate
 
         # This will only loop once (get all data in one go)
         rollout_data = self.rollout_buffer.get()
@@ -138,7 +226,7 @@ class A2C:
         actions = actions.long().flatten()
 
         # TODO: avoid second computation of everything because of the gradient
-        values, log_prob, entropy = self.policy.evaluate_actions(
+        values, log_prob, entropy = self.evaluate_actions(
             rollout_data.observations, actions)
         values = values.flatten()
 
@@ -163,13 +251,13 @@ class A2C:
             + self.vf_coef * value_loss
 
         # Optimization step
-        self.policy.optimizer.zero_grad()
+        self.optimizer.zero_grad()
         loss.backward()
 
         # Clip grad norm
-        nn.utils.clip_grad_norm_(self.policy.parameters(),
+        nn.utils.clip_grad_norm_(self.parameters(),
                                  self.max_grad_norm)
-        self.policy.optimizer.step()
+        self.optimizer.step()
 
     def collect_rollouts(self, callback: MaybeCallback) -> bool:
         """
@@ -192,7 +280,7 @@ class A2C:
             with torch.no_grad():
                 # Convert to pytorch tensor
                 obs_tensor = torch.as_tensor(self._last_obs)
-                action, value, log_prob = self.policy.forward(obs_tensor)
+                action, value, log_prob = self.forward(obs_tensor)
             action = action.numpy()
 
             # Perform action
@@ -216,7 +304,7 @@ class A2C:
         with torch.no_grad():
             # Compute value for the last timestep
             obs_tensor = torch.as_tensor(self._last_obs)
-            _, value, _ = self.policy.forward(obs_tensor)
+            _, value, _ = self.forward(obs_tensor)
 
         self.rollout_buffer.compute_returns_and_advantage(
             last_value=value,
@@ -243,17 +331,14 @@ class A2C:
             if continue_training is False:
                 break
 
-            self._update_current_progress_remaining(self.num_timesteps,
-                                                    total_timesteps)
-            self.train()
+            # Compute current progress remaining (starts from 1 and ends to 0)
+            self._current_progress_remaining = \
+                1.0 - self.num_timesteps / float(total_timesteps)
+
+            self.update_policy()
 
         callback.on_training_end()
         return self
-
-    def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
-        state_dicts = ["policy", "policy.optimizer"]
-
-        return state_dicts, []
 
     def _setup_learn(
             self,
@@ -288,36 +373,133 @@ class A2C:
 
         return total_timesteps, callback
 
-    def _update_current_progress_remaining(self, num_timesteps: int,
-                                           total_timesteps: int) -> None:
+    def forward(self, obs: torch.Tensor, deterministic: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Compute current progress remaining (starts from 1 and ends to 0)
-        :param num_timesteps: current number of timesteps
-        :param total_timesteps:
-        """
-        self._current_progress_remaining = 1.0 - float(num_timesteps) / float(
-            total_timesteps)
+        Forward pass in all the networks (actor and critic)
 
-    def _update_learning_rate(self, optimizer: torch.optim.Optimizer) -> None:
+        :param obs: Observation
+        :param deterministic: Whether to sample or use deterministic actions
+        :return: action, value and log probability of the action
         """
-        Update the optimizers learning rate using the current learning rate schedule
-        and the current progress remaining (from 1 to 0).
-        :param optimizer: An optimizer.
+        latent_pi, latent_vf = self._get_latent(obs)
+        # Evaluate the values for the given observations
+        values = self.value_net(latent_vf)
+        distribution = self._get_action_dist_from_latent(latent_pi)
+        actions = distribution.get_actions(deterministic=deterministic)
+        log_prob = distribution.log_prob(actions)
+        return actions, values, log_prob
+
+    def _get_latent(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        lr = self.lr_schedule(self._current_progress_remaining)
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = lr
+        Get the latent code (i.e., activations of the last layer of each network)
+        for the different networks.
+
+        :param obs: Observation
+        :return: Latent codes
+            for the actor, the value function and for gSDE function
+        """
+        features = self.features_extractor(obs.float())
+        latent_pi, latent_vf = self.mlp_extractor(features)
+        return latent_pi, latent_vf
+
+    def _get_action_dist_from_latent(self, latent_pi: torch.Tensor) -> CategoricalDistribution:
+        """
+        Retrieve action distribution given the latent codes.
+
+        :param latent_pi: Latent code for the actor
+        :return: Action distribution
+        """
+        mean_actions = self.action_net(latent_pi)
+        assert isinstance(self.action_dist, CategoricalDistribution), "Invalid action distribution"
+        # Here mean_actions are the logits before the softmax
+        return self.action_dist.proba_distribution(action_logits=mean_actions)
 
     def predict(
-            self,
-            observation: np.ndarray,
-            deterministic: bool = False,
+        self,
+        observation: np.ndarray,
+        deterministic: bool = False,
     ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """
-        Get the model's action(s) from an observation
+        Get the policy action and state from an observation (and optional state).
+        Includes sugar-coating to handle different observations (e.g. normalizing images).
+
         :param observation: the input observation
         :param deterministic: Whether or not to return deterministic actions.
         :return: the model's action and the next state
             (used in recurrent policies)
         """
-        return self.policy.predict(observation, deterministic)
+        assert not isinstance(observation, dict), "using ObsDictWrapper but no supported here"
+        observation = observation.reshape((-1,) + self.observation_space.shape)
+
+        observation = torch.as_tensor(observation)
+        with torch.no_grad():
+            latent_pi, _ = self._get_latent(observation)
+            distribution = self._get_action_dist_from_latent(latent_pi)
+            actions = distribution.get_actions(deterministic=deterministic)
+
+        # Convert to numpy
+        actions = actions.cpu().numpy()
+        assert not isinstance(self.action_space, gym.spaces.Box), "should not be box"
+
+        return actions
+
+    def act(self, observation):
+        """
+        Alias for deterministic prediction
+        """
+        return self.predict(observation, deterministic=True)
+
+    def evaluate_actions(self, obs: torch.Tensor, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Evaluate actions according to the current policy,
+        given the observations.
+
+        :param obs:
+        :param actions:
+        :return: estimated value, log likelihood of taking those actions
+            and entropy of the action distribution.
+        """
+        latent_pi, latent_vf, = self._get_latent(obs)
+        distribution = self._get_action_dist_from_latent(latent_pi)
+        log_prob = distribution.log_prob(actions)
+        values = self.value_net(latent_vf)
+        return values, log_prob, distribution.entropy()
+
+    def _get_constructor_parameters(self) -> Dict[str, Any]:
+
+        return dict(
+            env=self.env,
+            learning_rate=self.learning_rate,
+            optimizer_name=self.optimizer_name,
+            optimizer_kwargs=self.optimizer_kwargs,
+            n_steps=self.n_steps,
+            gamma=self.gamma,
+            gae_lambda=self.gae_lambda,
+            ent_coef=self.ent_coef,
+            vf_coef=self.vf_coef,
+            max_grad_norm=self.max_grad_norm,
+            normalize_advantage=self.normalize_advantage,
+            ortho_init=self.ortho_init,
+            net_arch=self.net_arch,
+            activation_fn_name=self.activation_fn_name,
+            seed=self.seed)
+
+    def save(self, path: str) -> None:
+        """
+        Save model to a given location.
+        """
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save({"state_dict": self.state_dict(),
+                    "data": self._get_constructor_parameters()}, path)
+
+    @classmethod
+    def load(cls, path: str):
+        """
+        Load model from path.
+        """
+        saved_variables = torch.load(path)
+        # Create policy object
+        model = cls(**saved_variables["data"])
+        # Load weights
+        model.load_state_dict(saved_variables["state_dict"])
+        return model
