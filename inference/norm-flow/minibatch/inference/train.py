@@ -7,12 +7,15 @@ from . plannar import NormalizingFlow
 from . loss import LossTeaching
 
 
-def train(data,
-          flow_length=16,
-          epochs=5000,
-          initial_lr=0.01,
-          n_sample=40,
-          seed=123):
+def train(
+        data,
+        flow_length=16,
+        epochs=5000,
+        optimizer_name="Adam",
+        optimizer_kwargs=None,
+        initial_lr=0.01,
+        n_sample=40,
+        seed=123):
 
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -25,9 +28,11 @@ def train(data,
 
     loss_func = LossTeaching()
 
-    optimizer = optim.Adam(
-        list(z_flow.parameters()) + list(theta_flow.parameters()),
-        lr=initial_lr)
+    if optimizer_kwargs is None:
+        optimizer_kwargs = {}
+    optimizer = getattr(optim, optimizer_name)(
+            list(z_flow.parameters()) + list(theta_flow.parameters()),
+            lr=initial_lr, **optimizer_kwargs)
 
     hist_loss = []
 

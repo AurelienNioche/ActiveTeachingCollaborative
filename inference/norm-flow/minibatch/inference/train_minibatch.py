@@ -16,6 +16,7 @@ def train_minibatch(
         batch_size=None,
         constant_lr=False,
         optimizer_name="Adam",
+        scheduler_name=None,
         seed=123,
         online_plot=False, # Plot online losses
         online_plot_freq_update=None, # only matters if online_plot is true
@@ -37,6 +38,12 @@ def train_minibatch(
     optimizer = getattr(optim, optimizer_name)(
         list(z_flow.parameters()) + list(theta_flow.parameters()),
         lr=initial_lr)
+
+    if scheduler_name is not None:
+        scheduler = getattr(optim.lr_scheduler, scheduler_name)(optimizer)
+        assert constant_lr is False
+    else:
+        scheduler = None
 
     loss_func = LossMinibatch()
 
@@ -72,6 +79,9 @@ def train_minibatch(
                 if constant_lr:
                     for g in optimizer.param_groups:
                         g['lr'] = initial_lr
+
+                if scheduler is not None:
+                    scheduler.step()
 
             loss_tracker.update()
 
