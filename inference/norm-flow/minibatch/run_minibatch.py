@@ -1,4 +1,4 @@
-from inference.plannar import NormalizingFlow
+from inference.flows import NormalizingFlow
 from simulate.simulate import simulate
 from inference.train_minibatch import train_minibatch
 

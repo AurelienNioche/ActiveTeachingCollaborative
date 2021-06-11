@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch import optim
 
-from . plannar import NormalizingFlow
+from . flows import NormalizingFlow
 from . loss_minibatch import LossMinibatch
 from plot.loss_tracker import LossTracker
 

@@ -1,5 +1,5 @@
 from inference.train import train
-from inference.plannar import NormalizingFlow
+from inference.flows import NormalizingFlow
 from simulate.simulate import simulate
 from plot.plot_hist_loss import plot_loss
 from plot.plot_posterior import plot_posterior

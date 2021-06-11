@@ -13,15 +13,11 @@ class LossMinibatch:
 
         # Z: Sample base distribution and apply transformation
         z0_Z = z_flow.sample_base_dist(n_sample)
-        zk_Z, ln_q0_Z, log_det_Z = z_flow(z0_Z)
+        zk_Z, ln_q0_Z, sum_ld_Z = z_flow(z0_Z)
 
         # θ: Sample base distribution and apply transformation
         z0_θ = theta_flow.sample_base_dist(n_sample)
-        zk_θ, ln_q0_θ, log_det_θ = theta_flow(z0_θ)
-
-        # Compute sum of log determinants over flow_length
-        sum_ld_Z = log_det_Z.sum(axis=0).squeeze()
-        sum_ld_θ = log_det_θ.sum(axis=0).squeeze()
+        zk_θ, ln_q0_θ, sum_ld_θ = theta_flow(z0_θ)
 
         # Get Z-values used for first parameter
         Zu1 = zk_Z[:, :n_u].T

@@ -3,7 +3,7 @@ import torch
 from torch import optim
 from tqdm.autonotebook import tqdm
 
-from . plannar import NormalizingFlow
+from . flows import NormalizingFlow
 from . loss import LossTeaching
 
 
