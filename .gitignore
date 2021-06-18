@@ -153,4 +153,4 @@ model2
 /inference/norm-flow/minibatch/artificial_mini_batch_loss.pdf
 /inference/norm-flow/minibatch/runs/
 
-ActiveTeachingCollaborative/inference/norm-flow/minibatch/lightning_logs/
+/inference/norm-flow/minibatch/lightning_logs/
