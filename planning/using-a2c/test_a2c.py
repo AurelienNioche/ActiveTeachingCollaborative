@@ -1,3 +1,5 @@
+import random
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -9,7 +11,7 @@ from a2c.a2c import A2C
 from a2c.callback import ProgressBarCallback
 
 from environments.continuous_teaching import ContinuousTeaching
-
+from human_agents import generate_agents
 
 sns.set()
 
@@ -24,7 +26,20 @@ def test_save_and_load():
 
 def test_continuous_teaching():
 
-    env = ContinuousTeaching(t_max=100, alpha=0.2, tau=0.9)
+    n_users = 100
+    n_items = 200
+    user = random.randint(0, n_users)
+    forget_rates, repetition_rates = generate_agents(n_users, n_items)
+    print("forget", forget_rates.mean())
+    print("repeat", repetition_rates.mean())
+
+    env = ContinuousTeaching(
+        t_max=100,
+        initial_forget_rates=forget_rates[user],
+        initial_repetition_rates=repetition_rates[user],
+        n_item=n_items,
+        tau=0.9)
+
     model = A2C(env, seed=123)
 
     iterations = env.t_max * 1000
