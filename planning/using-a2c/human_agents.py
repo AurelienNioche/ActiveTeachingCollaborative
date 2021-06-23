@@ -17,7 +17,7 @@ def generate_agents(n_users, n_items):
     for i in range(n_users):
         initial_repetition_rates += [mu[1] + z_user[i, 1] + z_item[:, 1]]
 
-    initial_forget_rates = - np.exp(np.array(initial_forget_rates))
+    initial_forget_rates = np.exp(np.array(initial_forget_rates))
 
     initial_repetition_rates = scipy.special.expit(np.array(initial_repetition_rates))
 

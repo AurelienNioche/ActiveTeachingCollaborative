@@ -27,7 +27,7 @@ def test_save_and_load():
 def test_continuous_teaching():
 
     n_users = 100
-    n_items = 200
+    n_items = 30
     user = random.randint(0, n_users)
     forget_rates, repetition_rates = generate_agents(n_users, n_items)
     print("forget", forget_rates.mean())

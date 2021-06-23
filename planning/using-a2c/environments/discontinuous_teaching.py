@@ -8,8 +8,8 @@ class DiscontinuousTeaching(gym.Env):
 
     def __init__(
             self,                              # Setting previous XP
-            alpha: float = 1.,
-            beta: float = 0.2,
+            initial_forget_rates: np.ndarray,
+            initial_repetition_rates: np.ndarray,
             tau: float = 0.9,
             n_item: int = 30,                       # 500
             n_session: int = 6,                     # 6
@@ -25,8 +25,14 @@ class DiscontinuousTeaching(gym.Env):
         self.n_item = n_item
 
         self.log_tau = np.log(tau)
-        self.alpha = alpha
-        self.beta = beta
+        if initial_repetition_rates.shape[0] == n_item and \
+                initial_forget_rates.shape[0] == n_item:
+            self.initial_forget_rates = initial_forget_rates
+            self.initial_repetition_rates = initial_repetition_rates
+        else:
+            raise ValueError(
+                "Mismatch between initial_rates shapes and n_item"
+            )
 
         self.n_session = n_session
         self.n_iter_per_session = n_iter_per_session
@@ -65,8 +71,8 @@ class DiscontinuousTeaching(gym.Env):
         delta = self.state[view, 0]
         rep = self.state[view, 1] - 1.
 
-        forget_rate = self.alpha * (1 - self.beta) ** rep
-
+        forget_rate = self.initial_forget_rates[view] * \
+              (1 - self.initial_repetition_rates[view]) ** rep
         logp_recall = - forget_rate * delta
         above_thr = logp_recall > self.log_tau
         reward = np.count_nonzero(above_thr) / self.n_item

@@ -6,8 +6,15 @@ import numpy as np
 
 class ContinuousTeaching(gym.Env, ABC):
 
-    def __init__(self, initial_forget_rates: np.ndarray, initial_repetition_rates: np.ndarray, tau=0.9, n_item=30, t_max=1000,
-                 time_per_iter=1):
+    def __init__(
+            self,
+            initial_forget_rates: np.ndarray,
+            initial_repetition_rates: np.ndarray,
+            tau=0.9,
+            n_item=30,
+            t_max=1000,
+            time_per_iter=1
+    ):
         super().__init__()
 
         self.action_space = gym.spaces.Discrete(n_item)
@@ -24,6 +31,10 @@ class ContinuousTeaching(gym.Env, ABC):
                 initial_forget_rates.shape[0] == n_item:
             self.initial_forget_rates = initial_forget_rates
             self.initial_repetition_rates = initial_repetition_rates
+        else:
+            raise ValueError(
+                "Mismatch between initial_rates shapes and n_item"
+            )
 
         self.t = 0
 
