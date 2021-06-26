@@ -49,6 +49,7 @@ class DiscontinuousTeaching(gym.Env):
     def reset(self):
         self.state = np.zeros((self.n_item, 2))
         self.obs = np.zeros((self.n_item, 2))
+        self.obs[:, 1] = self.initial_forget_rates
         self.current_iter = 0
         self.current_ss = 0
         self.time_elapsed_since_last_iter = 0
@@ -78,10 +79,8 @@ class DiscontinuousTeaching(gym.Env):
         reward = np.count_nonzero(above_thr) / self.n_item
 
         time_before_next_iter, done = self.next_delta()
-
         # Probability of recall at the time of the next action
-        self.obs[view, 0] = self.obs[view, 0] = \
-            np.exp(-forget_rate * (delta + time_before_next_iter))
+        self.obs[view, 0] = np.exp(-forget_rate * (delta + time_before_next_iter))
         # Forgetting rate of probability of recall
         self.obs[view, 1] = forget_rate
 

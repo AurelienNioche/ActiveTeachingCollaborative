@@ -41,6 +41,7 @@ class ContinuousTeaching(gym.Env, ABC):
     def reset(self):
         self.state = np.zeros((self.n_item, 2))
         self.obs = np.zeros((self.n_item, 2))
+        self.obs[:, 1] = self.initial_forget_rates
         self.t = 0
         return self.obs.flatten()
 
@@ -65,9 +66,9 @@ class ContinuousTeaching(gym.Env, ABC):
         # print(self.obs[view, 0])
         # Probability of recall at the time of the next action
         self.obs[view, 0] = np.exp(-forget_rate * (delta + self.time_per_iter))
-
         # Forgetting rate of probability of recall
         self.obs[view, 1] = forget_rate
+        # TODO: add one or multiple hypers new for (+ 2 * delta)
 
         info = {}
         self.t += 1
