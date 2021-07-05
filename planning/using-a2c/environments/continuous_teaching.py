@@ -13,15 +13,14 @@ class ContinuousTeaching(gym.Env, ABC):
             tau=0.9,
             n_item=30,
             t_max=1000,
-            time_per_iter=1
+            time_per_iter=1,
+            concat=False,
+            interval=1
     ):
         super().__init__()
 
         self.action_space = gym.spaces.Discrete(n_item)
-        self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
-                                                shape=(n_item*2, ))
         self.state = np.zeros((n_item, 2))
-        self.obs = np.zeros((n_item, 2))
         self.n_item = n_item
         self.t_max = t_max
         self.time_per_iter = time_per_iter
@@ -35,12 +34,18 @@ class ContinuousTeaching(gym.Env, ABC):
             raise ValueError(
                 "Mismatch between initial_rates shapes and n_item"
             )
+        self.concat_interval_nodes = concat & (interval != 1)
+        self.interval = interval
+        self.obs_dim = 3 if self.concat_interval_nodes else 2
+        self.obs = np.zeros((n_item, self.obs_dim))
+        self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
+                                                shape=(n_item * self.obs_dim, ))
 
         self.t = 0
 
     def reset(self):
         self.state = np.zeros((self.n_item, 2))
-        self.obs = np.zeros((self.n_item, 2))
+        self.obs = np.zeros((self.n_item, self.obs_dim))
         self.obs[:, 1] = self.initial_forget_rates
         self.t = 0
         return self.obs.flatten()
@@ -63,9 +68,12 @@ class ContinuousTeaching(gym.Env, ABC):
         logp_recall = - forget_rate * delta
         above_thr = logp_recall > self.log_tau
         reward = np.count_nonzero(above_thr) / self.n_item
-        # print(self.obs[view, 0])
         # Probability of recall at the time of the next action
-        self.obs[view, 0] = np.exp(-forget_rate * (delta + self.time_per_iter))
+        self.obs[view, 0] = np.exp(-forget_rate *
+                                   (self.interval * delta + self.time_per_iter))
+        if self.concat_interval_nodes:
+            self.obs[view, 2] = np.exp(-forget_rate *
+                                       (delta + self.time_per_iter))
         # Forgetting rate of probability of recall
         self.obs[view, 1] = forget_rate
         # TODO: add one or multiple hypers new for (+ 2 * delta)
