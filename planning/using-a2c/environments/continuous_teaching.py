@@ -34,19 +34,19 @@ class ContinuousTeaching(gym.Env, ABC):
             raise ValueError(
                 "Mismatch between initial_rates shapes and n_item"
             )
-        self.concat_interval_nodes = concat & (interval != 1)
         self.interval = interval
-        self.obs_dim = 3 if self.concat_interval_nodes else 2
+        self.obs_dim = 2
         self.obs = np.zeros((n_item, self.obs_dim))
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
                                                 shape=(n_item * self.obs_dim, ))
-
+        self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
 
     def reset(self):
         self.state = np.zeros((self.n_item, 2))
         self.obs = np.zeros((self.n_item, self.obs_dim))
         self.obs[:, 1] = self.initial_forget_rates
+        # self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
         return self.obs.flatten()
 
@@ -67,16 +67,21 @@ class ContinuousTeaching(gym.Env, ABC):
 
         logp_recall = - forget_rate * delta
         above_thr = logp_recall > self.log_tau
-        reward = np.count_nonzero(above_thr) / self.n_item
+        # n_learned_now = np.count_nonzero(above_thr)
+        #
+        # penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
+        # penalizing_factor /= n_learned_now
+        # print(n_learned_now)
+        # print(penalizing_factor)
+
+        reward = np.count_nonzero(above_thr) / self.n_item # + min(penalizing_factor, 0)
+
+        self.learned_before = above_thr
         # Probability of recall at the time of the next action
         self.obs[view, 0] = np.exp(-forget_rate *
                                    (self.interval * delta + self.time_per_iter))
-        if self.concat_interval_nodes:
-            self.obs[view, 2] = np.exp(-forget_rate *
-                                       (delta + self.time_per_iter))
         # Forgetting rate of probability of recall
         self.obs[view, 1] = forget_rate
-        # TODO: add one or multiple hypers new for (+ 2 * delta)
 
         info = {}
         self.t += 1
