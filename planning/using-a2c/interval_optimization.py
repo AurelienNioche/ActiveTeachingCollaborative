@@ -95,6 +95,6 @@ if __name__ == '__main__':
         load_if_exists=False
     )
     try:
-        study.optimize(optimize_agent, n_trials=10, n_jobs=1)
+        study.optimize(optimize_agent, n_trials=200, n_jobs=4)
     except KeyboardInterrupt:
         print('Interrupted by keyboard.')
