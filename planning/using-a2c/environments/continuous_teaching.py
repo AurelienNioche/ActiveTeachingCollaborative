@@ -10,12 +10,12 @@ class ContinuousTeaching(gym.Env, ABC):
             self,
             initial_forget_rates: np.ndarray,
             initial_repetition_rates: np.ndarray,
+            delta_coeffs: np.array,
             tau=0.9,
             n_item=30,
             t_max=1000,
             time_per_iter=1,
-            concat=False,
-            interval=1
+            n_coeffs:int =1
     ):
         super().__init__()
 
@@ -34,8 +34,8 @@ class ContinuousTeaching(gym.Env, ABC):
             raise ValueError(
                 "Mismatch between initial_rates shapes and n_item"
             )
-        self.interval = interval
-        self.obs_dim = 2
+        self.delta_coeffs = delta_coeffs
+        self.obs_dim = n_coeffs
         self.obs = np.zeros((n_item, self.obs_dim))
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
                                                 shape=(n_item * self.obs_dim, ))
@@ -45,7 +45,7 @@ class ContinuousTeaching(gym.Env, ABC):
     def reset(self):
         self.state = np.zeros((self.n_item, 2))
         self.obs = np.zeros((self.n_item, self.obs_dim))
-        self.obs[:, 1] = self.initial_forget_rates
+        # self.obs[:, 1] = self.initial_forget_rates
         # self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
         return self.obs.flatten()
@@ -78,10 +78,13 @@ class ContinuousTeaching(gym.Env, ABC):
 
         self.learned_before = above_thr
         # Probability of recall at the time of the next action
-        self.obs[view, 0] = np.exp(-forget_rate *
-                                   (self.interval * delta + self.time_per_iter))
+        for i in range(self.delta_coeffs.shape[0]):
+            self.obs[view, i] = np.exp(
+                -forget_rate *
+                (self.delta_coeffs[i] * delta + self.time_per_iter)
+            )
         # Forgetting rate of probability of recall
-        self.obs[view, 1] = forget_rate
+        # self.obs[view, 1] = forget_rate
 
         info = {}
         self.t += 1
