@@ -92,7 +92,7 @@ if __name__ == '__main__':
         direction='maximize',
         study_name=study_name,
         storage=storage_name,
-        load_if_exists=False
+        load_if_exists=True
     )
     try:
         study.optimize(optimize_agent, n_trials=200, n_jobs=4)
