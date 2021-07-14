@@ -15,7 +15,8 @@ class ContinuousTeaching(gym.Env, ABC):
             n_item=30,
             t_max=1000,
             time_per_iter=1,
-            n_coeffs:int =1
+            n_coeffs:int =1,
+            penalty_coeff: float=0.5,
     ):
         super().__init__()
 
@@ -41,6 +42,7 @@ class ContinuousTeaching(gym.Env, ABC):
                                                 shape=(n_item * self.obs_dim, ))
         self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
+        self.penalty_coeff = penalty_coeff
 
     def reset(self):
         self.state = np.zeros((self.n_item, 2))
@@ -67,14 +69,15 @@ class ContinuousTeaching(gym.Env, ABC):
 
         logp_recall = - forget_rate * delta
         above_thr = logp_recall > self.log_tau
-        # n_learned_now = np.count_nonzero(above_thr)
-        #
-        # penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
-        # penalizing_factor /= n_learned_now
+        n_learned_now = np.count_nonzero(above_thr)
+
+        penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
+        penalizing_factor /= n_learned_now
         # print(n_learned_now)
         # print(penalizing_factor)
 
-        reward = np.count_nonzero(above_thr) / self.n_item # + min(penalizing_factor, 0)
+        reward = (1 - self.penalty_coeff) * (np.count_nonzero(above_thr) / self.n_item) \
+                 + self.penalty_coeff * min(penalizing_factor, 0)
 
         self.learned_before = above_thr
         # Probability of recall at the time of the next action
@@ -84,7 +87,6 @@ class ContinuousTeaching(gym.Env, ABC):
                 (self.delta_coeffs[i] * delta + self.time_per_iter)
             )
         # Forgetting rate of probability of recall
-        # self.obs[view, 1] = forget_rate
 
         info = {}
         self.t += 1
