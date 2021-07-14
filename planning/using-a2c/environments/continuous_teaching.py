@@ -47,8 +47,7 @@ class ContinuousTeaching(gym.Env, ABC):
     def reset(self):
         self.state = np.zeros((self.n_item, 2))
         self.obs = np.zeros((self.n_item, self.obs_dim))
-        # self.obs[:, 1] = self.initial_forget_rates
-        # self.learned_before = np.zeros((self.n_item, ))
+        self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
         return self.obs.flatten()
 
