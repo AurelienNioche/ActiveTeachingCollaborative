@@ -12,28 +12,29 @@ from environments.continuous_teaching import ContinuousTeaching
 
 from human_agents import generate_agents
 
-n_users = 100
+n_users = 30
 n_items = 30
 random.seed(123)
-user = random.randint(0, n_users)
+test_users = random.sample(range(0, n_users), 3)
 forget_rates, repetition_rates = generate_agents(n_users, n_items)
 
 
-def run_one_episode(env, policy):
+def run_on_test_users(env, policy):
+    global test_users
     rewards = []
     actions = []
+    for user in test_users:
+        obs = env.reset_for_new_user(user)
+        while True:
+            action = policy.act(obs)
+            obs, reward, done, info = env.step(action)
 
-    obs = env.reset()
-    while True:
-        action = policy.act(obs)
-        obs, reward, done, info = env.step(action)
+            rewards.append(reward)
+            actions.append(action)
 
-        rewards.append(reward)
-        actions.append(action)
-
-        if done:
-            obs = env.reset()
-            break
+            if done:
+                obs = env.reset()
+                break
 
     return rewards, actions
 
@@ -43,7 +44,7 @@ def optimize_interval(trial):
     n_coeffs = trial.suggest_int('n_coeffs', 1, 4)
     coeffs = []
     for i in range(n_coeffs):
-        delta_coeff = trial.suggest_int('delta_coeff_{}'.format(i), 1, 100)
+        delta_coeff = trial.suggest_float('delta_coeff_{}'.format(i), 1, 100)
         coeffs += [delta_coeff]
 
     return {
@@ -57,14 +58,14 @@ def optimize_agent(trial, ):
         Optuna maximises the negative log likelihood, so we
         need to negate the reward here
     """
-    global forget_rates, repetition_rates, user
+    global forget_rates, repetition_rates
     env_params = optimize_interval(trial)
 
     env = ContinuousTeaching(
         t_max=100,
         tau=0.9,
-        initial_forget_rates=forget_rates[user],
-        initial_repetition_rates=repetition_rates[user],
+        initial_forget_rates=forget_rates,
+        initial_repetition_rates=repetition_rates,
         **env_params
     )
     model = A2C(
@@ -79,7 +80,7 @@ def optimize_agent(trial, ):
 
     with ProgressBarCallback(env, check_freq) as callback:
         model.learn(iterations, callback=callback)
-    rewards, actions = run_one_episode(env, model)
+    rewards, actions = run_on_test_users(env, model)
     return np.sum(rewards)
 
 

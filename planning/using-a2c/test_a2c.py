@@ -26,19 +26,22 @@ def test_save_and_load():
 
 def test_continuous_teaching():
 
-    n_users = 100
+    n_users = 30
     n_items = 30
-    user = random.randint(0, n_users)
     forget_rates, repetition_rates = generate_agents(n_users, n_items)
     print("forget", forget_rates.mean())
     print("repeat", repetition_rates.mean())
 
     env = ContinuousTeaching(
         t_max=100,
-        initial_forget_rates=forget_rates[user],
-        initial_repetition_rates=repetition_rates[user],
+        initial_forget_rates=forget_rates,
+        initial_repetition_rates=repetition_rates,
         n_item=n_items,
-        tau=0.9)
+        tau=0.9,
+        delta_coeffs=np.array([40, 7]),
+        n_coeffs=2,
+        penalty_coeff=0.0
+    )
 
     model = A2C(env, seed=123)
 
