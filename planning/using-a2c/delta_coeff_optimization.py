@@ -43,8 +43,10 @@ def optimize_interval(trial):
     """ Learning hyper-parameters we want to optimise"""
     n_coeffs = trial.suggest_int('n_coeffs', 1, 4)
     coeffs = []
+    last_coeff = 0
     for i in range(n_coeffs):
-        delta_coeff = trial.suggest_float('delta_coeff_{}'.format(i), 1, 100)
+        delta_coeff = trial.suggest_float('delta_coeff_{}'.format(i), last_coeff, 100)
+        last_coeff = delta_coeff
         coeffs += [delta_coeff]
 
     return {
