@@ -5,12 +5,12 @@ import random
 import numpy as np
 import optuna
 
-from a2c.a2c import A2C
-from a2c.callback import ProgressBarCallback
+from ..a2c.a2c import A2C
+from ..a2c.callback import ProgressBarCallback
 
-from environments.continuous_teaching import ContinuousTeaching
+from ..environments.continuous_teaching import ContinuousTeaching
 
-from human_agents import generate_agents
+from ..human_agents import generate_agents
 
 n_users = 30
 n_items = 30
@@ -56,10 +56,8 @@ def optimize_interval(trial):
 
 
 def optimize_agent(trial, ):
-    """ Train the model and optimize
-        Optuna maximises the negative log likelihood, so we
-        need to negate the reward here
-    """
+    """ Train the model and optimize"""
+
     global forget_rates, repetition_rates
     env_params = optimize_interval(trial)
 
