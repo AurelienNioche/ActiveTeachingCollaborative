@@ -5,12 +5,12 @@ import random
 import numpy as np
 import optuna
 
-from ..a2c.a2c import A2C
-from ..a2c.callback import ProgressBarCallback
+from .a2c.a2c import A2C
+from .a2c.callback import ProgressBarCallback
 
-from ..environments.continuous_teaching import ContinuousTeaching
+from .environments.continuous_teaching import ContinuousTeaching
 
-from ..human_agents import generate_agents
+from .human_agents import generate_agents
 
 n_users = 30
 n_items = 30
