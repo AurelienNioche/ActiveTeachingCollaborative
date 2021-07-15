@@ -12,37 +12,36 @@ from environments.continuous_teaching import ContinuousTeaching
 
 from human_agents import generate_agents
 
-n_users = 100
+n_users = 30
 n_items = 30
 random.seed(123)
-user = random.randint(0, n_users)
+test_users = random.sample(range(0, n_users), 3)
 forget_rates, repetition_rates = generate_agents(n_users, n_items)
-forget_rates.tofile('forget_rates.csv', sep=',')
-repetition_rates.tofile('repetition_rates.csv', sep=',')
 
 
-def run_one_episode(env, policy):
+def run_on_test_users(env, policy):
+    global test_users
     rewards = []
     actions = []
-    env.penalty_coeff=0.0
-    obs = env.reset()
-    while True:
-        action = policy.act(obs)
-        obs, reward, done, info = env.step(action)
+    for user in test_users:
+        obs = env.reset_for_new_user(user)
+        while True:
+            action = policy.act(obs)
+            obs, reward, done, info = env.step(action)
 
-        rewards.append(reward)
-        actions.append(action)
+            rewards.append(reward)
+            actions.append(action)
 
-        if done:
-            obs = env.reset()
-            break
+            if done:
+                obs = env.reset()
+                break
 
     return rewards, actions
 
 
 def optimize_coeff(trial):
     """ Learning hyper-parameters we want to optimise"""
-    coeff = trial.suggest_float('n_coeffs', 0.0, 1.0)
+    coeff = trial.suggest_float('penalty_coeff', 0.0, 1.0)
     return {
         'penalty_coeff': coeff,
     }
@@ -53,14 +52,14 @@ def optimize_agent(trial, ):
         Optuna maximises the negative log likelihood, so we
         need to negate the reward here
     """
-    global forget_rates, repetition_rates, user
+    global forget_rates, repetition_rates
     env_params = optimize_coeff(trial)
 
     env = ContinuousTeaching(
         t_max=100,
         tau=0.9,
-        initial_forget_rates=forget_rates[user],
-        initial_repetition_rates=repetition_rates[user],
+        initial_forget_rates=forget_rates,
+        initial_repetition_rates=repetition_rates,
         n_coeffs=2,
         delta_coeffs=np.array([40, 7]),
         **env_params
@@ -78,7 +77,7 @@ def optimize_agent(trial, ):
 
     with ProgressBarCallback(env, check_freq) as callback:
         model.learn(iterations, callback=callback)
-    rewards, actions = run_one_episode(env, model)
+    rewards, actions = run_on_test_users(env, model)
     return np.sum(rewards)
 
 
@@ -94,6 +93,6 @@ if __name__ == '__main__':
         load_if_exists=True
     )
     try:
-        study.optimize(optimize_agent, n_trials=200, n_jobs=4)
+        study.optimize(optimize_agent, n_trials=500, n_jobs=4)
     except KeyboardInterrupt:
         print('Interrupted by keyboard.')
