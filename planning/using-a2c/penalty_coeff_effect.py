@@ -24,6 +24,7 @@ def run_on_test_users(env, policy):
     rewards = []
     actions = []
     for user in test_users:
+        env.penalty_coeff = 0.0
         obs = env.reset_for_new_user(user)
         while True:
             action = policy.act(obs)
@@ -93,6 +94,6 @@ if __name__ == '__main__':
         load_if_exists=True
     )
     try:
-        study.optimize(optimize_agent, n_trials=500, n_jobs=4)
+        study.optimize(optimize_agent, n_trials=200)
     except KeyboardInterrupt:
         print('Interrupted by keyboard.')
