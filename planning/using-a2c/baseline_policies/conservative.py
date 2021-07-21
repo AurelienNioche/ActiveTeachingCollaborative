@@ -124,11 +124,13 @@ class Conservative:
 
         return first_item
 
-    def ask(self, psy):
+    def act(self, hist, param, is_item_specific=True):
+        # begin
+        # param = psy.inferred_learner_param()
+        # hist = psy.learner.hist.copy()
+        # is_item_specific = psy.is_item_specific
+        # end
 
-        param = psy.inferred_learner_param()
-        hist = psy.learner.hist.copy()
-        is_item_specific = psy.is_item_specific
 
         no_dummy = hist != DUMMY_VALUE
         current_step = np.sum(no_dummy)
