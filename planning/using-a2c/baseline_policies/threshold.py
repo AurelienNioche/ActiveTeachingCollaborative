@@ -2,9 +2,8 @@ import numpy as np
 
 
 class Threshold:
-    def __init__(self, env, tau):
-        self.tau = tau
-        self.n_item = env.n_item
+    def __init__(self, env):
+        self.env = env
 
     @staticmethod
     def extract_p_rec(obs):
@@ -21,14 +20,14 @@ class Threshold:
 
         p_rec = self.extract_p_rec(obs)
 
-        view_under_thr = (0 < p_rec) * (p_rec <= self.tau)
+        view_under_thr = (0 < p_rec) * (p_rec <= self.env.tau)
         if np.count_nonzero(view_under_thr) > 0:
-            items = np.arange(self.n_item)
+            items = np.arange(self.env.n_item)
             selection = items[view_under_thr]
             action = selection[np.argmin(p_rec[view_under_thr])]
         else:
             n_seen = np.count_nonzero(p_rec)
-            max_item = self.n_item - 1
+            max_item = self.env.n_item - 1
             action = np.min((n_seen, max_item))
 
         return action

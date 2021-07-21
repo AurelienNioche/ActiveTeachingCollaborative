@@ -1,28 +1,19 @@
 import numpy as np
 
 
-DUMMY_VALUE = -1
-
-
 class Conservative:
 
-    # TODO: Adapt the code
+    """
+    Works only with the discountinuous environment
+    """
 
-    def __init__(self, n_item, learnt_threshold, time_per_iter,
-                 n_ss, ss_n_iter, time_between_ss):
+    def __init__(self, env):
+        self.env = env
 
-        self.n_item = n_item
-        self.log_thr = np.log(learnt_threshold)
-
-        self.eval_ts = n_ss * time_between_ss
-        self.review_ts = np.hstack(
-            [
-                np.arange(x, x + (ss_n_iter * time_per_iter), time_per_iter)
-                for x in np.arange(0, time_between_ss * n_ss, time_between_ss)
-            ])
-
-    def _threshold_select(self, n_pres, param, n_item, is_item_specific,
-                          ts, last_pres):
+    def _threshold_select(
+            self, n_pres, initial_forget_rates,
+            initial_repetition_rates, n_item,
+            delta):
 
         if np.max(n_pres) == 0:
             item = 0
@@ -30,15 +21,13 @@ class Conservative:
             seen = n_pres > 0
 
             log_p_seen = self._cp_log_p_seen(
-                seen=seen,
-                n_pres=n_pres,
-                param=param,
-                n_item=n_item,
-                is_item_specific=is_item_specific,
-                last_pres=last_pres,
-                ts=ts)
+                n_pres=n_pres, delta=delta,
+                initial_forget_rates=initial_forget_rates,
+                initial_repetition_rates=initial_repetition_rates)
 
-            if np.sum(seen) == n_item or np.min(log_p_seen) <= self.log_thr:
+            if np.sum(seen) == n_item \
+                    or np.min(log_p_seen) <= self.env.log_tau:
+
                 item = np.flatnonzero(seen)[np.argmin(log_p_seen)]
             else:
                 item = np.argmin(seen)
@@ -46,75 +35,115 @@ class Conservative:
         return item
 
     @staticmethod
-    def _cp_log_p_seen(seen, n_pres, param, n_item, is_item_specific,
-                       last_pres, ts):
+    def _cp_log_p_seen(
+            n_pres,
+            delta,
+            initial_forget_rates,
+            initial_repetition_rates):
 
-        if is_item_specific:
-            init_forget = param[:n_item][seen, 0]
-            rep_effect = param[:n_item][seen, 1]
+        n_item = n_pres.shape[0]
+
+        view = n_pres > 0
+        rep = n_pres[view] - 1
+        delta = delta[view]
+
+        init_forget = initial_forget_rates[:n_item][view]
+        rep_effect = initial_repetition_rates[:n_item][view]
+
+        forget_rate = init_forget * \
+            (1 - rep_effect) ** rep
+        logp_recall = - forget_rate * delta
+        return logp_recall
+
+    def step(
+            self,
+            item,
+            n_pres,
+            delta,
+            current_iter,
+            current_ss,
+    ):
+
+        done = False
+
+        # update progression within session, and between session
+        # - which iteration the learner is at?
+        # - which session the learner is at?
+        current_iter += 1
+        if current_iter >= self.env.n_iter_per_session:
+            current_iter = 0
+            current_ss += 1
+            time_elapsed = self.env.break_length
         else:
-            init_forget, rep_effect = param
+            time_elapsed = self.env.time_per_iter
 
-        return \
-            -init_forget \
-            * (1 - rep_effect) ** (n_pres[seen] - 1) \
-            * (ts - last_pres[seen])
+        if current_ss >= self.env.n_session:
+            done = True
 
-    def _recursive_exp_decay(self, n_pres, last_pres,
-                             future_ts, param, eval_ts,
-                             is_item_specific):
+        # increase delta
+        delta += time_elapsed
+        # ...specific for item shown
+        delta[item] = time_elapsed
+        # increment number of presentation
+        n_pres += 1
 
-        n_item = self.n_item
+        return n_pres, delta, current_iter, current_ss, done
 
-        now = future_ts[0]
-        future = future_ts[1:]
+    def act(self, obs):
 
-        n_pres_current = n_pres
-        last_pres_current = last_pres
+        initial_forget_rates \
+            = self.env.all_forget_rates[self.env.current_user]
+        initial_repetition_rates \
+            = self.env.all_repetition_rates[self.env.current_user]
 
+        current_iter = self.env.current_iter
+        current_ss = self.env.current_ss
+
+        n_item = self.env.n_item
+
+        delta_current = self.env.state[:, 0].copy()
+        n_pres_current = self.env.state[:, 1].copy()
+
+        # Reduce the number of item to learn
+        # until every item presented is learnable
         while True:
 
             n_pres = n_pres_current[:n_item]
-            last_pres = last_pres_current[:n_item]
+            delta = delta_current[:n_item]
 
             first_item = self._threshold_select(
-                n_pres=n_pres,
-                param=param,
-                n_item=n_item,
-                is_item_specific=is_item_specific,
-                ts=now, last_pres=last_pres)
+                n_pres=n_pres,  delta=delta,
+                initial_forget_rates=initial_forget_rates,
+                initial_repetition_rates=initial_repetition_rates,
+                n_item=n_item)
 
             n_item = first_item + 1
 
             n_pres = n_pres_current[:n_item].copy()
-            last_pres = last_pres_current[:n_item].copy()
+            delta = delta_current[:n_item].copy()
 
-            n_pres[first_item] += 1
-            last_pres[first_item] = now
+            n_pres, delta, current_iter, current_ss, done = \
+                self.step(first_item, n_pres, delta, current_iter, current_ss)
 
-            for ts in future:
+            # Do rollouts...
+            while not done:
 
                 item = self._threshold_select(
-                    n_pres=n_pres,
-                    param=param,
-                    n_item=n_item,
-                    is_item_specific=is_item_specific,
-                    ts=ts, last_pres=last_pres)
+                    n_pres=n_pres, delta=delta,
+                    initial_forget_rates=initial_forget_rates,
+                    initial_repetition_rates=initial_repetition_rates,
+                    n_item=n_item)
 
-                n_pres[item] += 1
-                last_pres[item] = ts
+                n_pres, delta, current_iter, current_ss, done = \
+                    self.step(item, n_pres, delta, current_iter,
+                              current_ss)
 
-            seen = n_pres > 0
             log_p_seen = self._cp_log_p_seen(
-                seen=seen,
-                n_pres=n_pres,
-                param=param,
-                n_item=n_item,
-                is_item_specific=is_item_specific,
-                last_pres=last_pres,
-                ts=eval_ts)
+                n_pres=n_pres, delta=delta,
+                initial_forget_rates=initial_forget_rates,
+                initial_repetition_rates=initial_repetition_rates)
 
-            n_learnt = np.sum(log_p_seen > self.log_thr)
+            n_learnt = np.sum(log_p_seen > self.env.log_tau)
             if n_learnt == n_item:
                 break
 
@@ -123,34 +152,3 @@ class Conservative:
                 break
 
         return first_item
-
-    def act(self, hist, param, is_item_specific=True):
-        # begin
-        # param = psy.inferred_learner_param()
-        # hist = psy.learner.hist.copy()
-        # is_item_specific = psy.is_item_specific
-        # end
-
-
-        no_dummy = hist != DUMMY_VALUE
-        current_step = np.sum(no_dummy)
-        current_seen_item = np.unique(hist[no_dummy])
-
-        future_ts = self.review_ts[current_step:]
-
-        n_pres = np.zeros(self.n_item)
-        last_pres = np.zeros(self.n_item)
-        for i, item in enumerate(current_seen_item):
-            is_item = hist == item
-            n_pres[item] = np.sum(is_item)
-            last_pres[item] = np.max(self.review_ts[is_item])
-
-        item = self._recursive_exp_decay(
-            is_item_specific=is_item_specific,
-            future_ts=future_ts,
-            eval_ts=self.eval_ts,
-            param=param,
-            n_pres=n_pres,
-            last_pres=last_pres)
-
-        return item

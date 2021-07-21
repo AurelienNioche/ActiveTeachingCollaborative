@@ -27,7 +27,8 @@ class DiscontinuousTeaching(gym.Env):
         self.action_space = gym.spaces.Discrete(n_item)
         self.n_item = n_item
 
-        self.log_tau = np.log(tau)
+        self.tau = tau
+        self.log_tau = np.log(self.tau)
         if delta_coeffs.shape[0] != n_coeffs:
             raise ValueError(
                 "Mismatch between delta_coeffs shape and n_coeffs"

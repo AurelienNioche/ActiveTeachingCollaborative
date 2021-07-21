@@ -16,7 +16,7 @@ class ContinuousTeaching(gym.Env, ABC):
             n_item=30,
             t_max=1000,
             time_per_iter=1,
-            n_coeffs:int =1,
+            n_coeffs: int=1,
             penalty_coeff: float=0.5,
     ):
         super().__init__()
@@ -26,7 +26,8 @@ class ContinuousTeaching(gym.Env, ABC):
         self.n_item = n_item
         self.t_max = t_max
         self.time_per_iter = time_per_iter
-        self.log_tau = np.log(tau)
+        self.tau = tau
+        self.log_tau = np.log(self.tau)
 
         if delta_coeffs.shape[0] != n_coeffs:
             raise ValueError(
