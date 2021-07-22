@@ -132,7 +132,7 @@ class DiscontinuousTeaching(gym.Env):
 
         reward = (1 - self.penalty_coeff) * (np.count_nonzero(above_thr) / self.n_item) \
                  + self.penalty_coeff * min(penalizing_factor, 0)
-
+        reward *= (1. / (1. - self.penalty_coeff))
         self.learned_before = above_thr
 
         time_before_next_iter, done = self.next_delta()
