@@ -40,6 +40,7 @@ def test_discontinuous_teaching():
         initial_repetition_rates=repetition_rates,
         delta_coeffs=np.array([3, 20]),
         n_coeffs=2,
+        n_item=n_items,
         penalty_coeff=0.3
     )
     model = A2C(env, seed=123)
