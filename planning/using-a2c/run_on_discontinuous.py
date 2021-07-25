@@ -21,6 +21,7 @@ n_items = 140
 
 def produce_rates():
     global n_items, n_users
+    np.random.seed(123)
     forget_rates, repetition_rates = generate_agents(n_users, n_items)
     print("forget", forget_rates.mean())
     print("repeat", repetition_rates.mean())
@@ -38,23 +39,23 @@ def test_discontinuous_teaching():
         n_iter_per_session=100,
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
-        delta_coeffs=np.array([3, 20]),
-        n_coeffs=2,
+        delta_coeffs=np.array([3, 20, 50]),
+        n_coeffs=3,
         n_item=n_items,
         penalty_coeff=0.3
     )
-    model = A2C(env, seed=123)
+    m = A2C(env, seed=123)
 
     env_t_max = env.n_session * env.n_iter_per_session
     iterations = env_t_max * 20000
     check_freq = env_t_max
 
     with ProgressBarCallback(env, check_freq) as callback:
-        model.learn(iterations, callback=callback)
+        m.learn(iterations, callback=callback)
 
     plt.plot([np.mean(r) for r in callback.hist_rewards])
     plt.show()
-    return model
+    return m
 
 
 if __name__ == "__main__":
