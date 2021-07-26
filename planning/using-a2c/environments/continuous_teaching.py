@@ -17,7 +17,8 @@ class ContinuousTeaching(gym.Env, ABC):
             t_max=1000,
             time_per_iter=1,
             n_coeffs: int=1,
-            penalty_coeff: float=0.5,
+            penalty_coeff: float=0.2,
+            reward_coeff: float=1,
     ):
         super().__init__()
 
@@ -55,6 +56,8 @@ class ContinuousTeaching(gym.Env, ABC):
             raise ValueError(
                 "Mismatch between initial_rates shapes and n_item"
             )
+        self.reward_range = (- reward_coeff, reward_coeff)
+        self.reward_coeff = reward_coeff
 
     def pick_a_user(self):
         self.current_user = random.randint(0, self.n_users - 1)
@@ -112,11 +115,10 @@ class ContinuousTeaching(gym.Env, ABC):
 
         penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
         penalizing_factor /= n_learned_now
-        # print(n_learned_now)
-        # print(penalizing_factor)
 
         reward = (1 - self.penalty_coeff) * (np.count_nonzero(above_thr) / self.n_item) \
                  + self.penalty_coeff * min(penalizing_factor, 0)
+        reward *= self.reward_coeff
 
         self.learned_before = above_thr
         # Probability of recall at the time of the next action

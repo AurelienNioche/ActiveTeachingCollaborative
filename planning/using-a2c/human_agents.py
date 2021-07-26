@@ -4,6 +4,7 @@ import numpy as np
 
 
 def generate_agents(n_users, n_items):
+    np.random.seed(123)
     df_param = pd.read_csv("data/param_exp_data.csv", index_col=0)
     mu = np.array([df_param.loc["unconstrained", f"mu{i}"] for i in range(1, 3)])
     sig_users = np.array([df_param.loc["unconstrained", f"sigma_u{i}"] for i in range(1, 3)])
