@@ -23,6 +23,7 @@ def run_on_test_users(env, policy):
     global test_users
     rewards = []
     actions = []
+    env.reward_coeff = 1
     for user in test_users:
         env.penalty_coeff=0.0
         obs = env.reset_for_new_user(user)
@@ -44,16 +45,17 @@ def optimize_agent(trial, ):
     """ Train the model and optimize"""
 
     global forget_rates, repetition_rates
-    coeff = trial.suggest_float('coeff', n_items)
+    coeff = trial.suggest_float('coeff', 0, n_items)
 
     env = ContinuousTeaching(
         t_max=100,
         tau=0.9,
+        n_item=n_items,
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
-        delta_coeffs=[3, 20],
+        delta_coeffs=np.array([3, 20]),
         n_coeffs=2,
-
+        reward_coeff=coeff
     )
     model = A2C(
         env,
@@ -62,7 +64,7 @@ def optimize_agent(trial, ):
         normalize_advantage=False,
     )
 
-    iterations = env.t_max * 1000
+    iterations = env.t_max * 2000
     check_freq = env.t_max
 
     with ProgressBarCallback(env, check_freq) as callback:
@@ -74,7 +76,7 @@ def optimize_agent(trial, ):
 if __name__ == '__main__':
 
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-    study_name = "delta_coefficient_study"
+    study_name = "reward_coefficient_study"
     storage_name = "sqlite:///{}.db".format(study_name)
     study = optuna.create_study(
         direction='maximize',
@@ -83,6 +85,6 @@ if __name__ == '__main__':
         load_if_exists=True
     )
     try:
-        study.optimize(optimize_agent, n_trials=500)
+        study.optimize(optimize_agent, n_trials=200)
     except KeyboardInterrupt:
         print('Interrupted by keyboard.')
