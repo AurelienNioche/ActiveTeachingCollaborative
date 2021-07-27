@@ -39,12 +39,16 @@ def test_discontinuous_teaching():
         n_iter_per_session=100,
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
-        delta_coeffs=np.array([3, 20, 50]),
-        n_coeffs=3,
+        delta_coeffs=np.array([3, 20]),
+        n_coeffs=2,
         n_item=n_items,
-        penalty_coeff=0.3
+        penalty_coeff=0.2
     )
-    m = A2C(env, seed=123)
+    layers_dim = [64, 64, 128]
+    m = A2C(env,
+            net_arch=[{'pi': layers_dim, 'vf': layers_dim}],
+            seed=123
+        )
 
     env_t_max = env.n_session * env.n_iter_per_session
     iterations = env_t_max * 20000
