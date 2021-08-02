@@ -72,9 +72,9 @@ class DiscontinuousTeaching(gym.Env):
 
     def reset(self):
         self.state = np.zeros((self.n_item, 2))
-        user = self.pick_a_user()
-        self.initial_forget_rates = self.all_forget_rates[user]
-        self.initial_repetition_rates = self.all_repetition_rates[user]
+        self.current_user = self.pick_a_user()
+        self.initial_forget_rates = self.all_forget_rates[self.current_user]
+        self.initial_repetition_rates = self.all_repetition_rates[self.current_user]
         self.obs = np.zeros((self.n_item, self.obs_dim))
         self.learned_before = np.zeros((self.n_item, ))
         self.current_iter = 0
