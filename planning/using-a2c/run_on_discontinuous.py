@@ -80,7 +80,7 @@ def run_continuous_teaching(reward_type):
 
     m = A2C(env, seed=123)
 
-    iterations = env.t_max * 40000
+    iterations = env.t_max * 1e5
     check_freq = env.t_max
 
     with ProgressBarCallback(env, check_freq) as callback:
