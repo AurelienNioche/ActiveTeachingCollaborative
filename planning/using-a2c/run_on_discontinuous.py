@@ -16,7 +16,7 @@ from human_agents import generate_agents
 
 sns.set()
 n_users = 5
-n_items = 140
+n_items = 30
 
 
 def produce_rates():
