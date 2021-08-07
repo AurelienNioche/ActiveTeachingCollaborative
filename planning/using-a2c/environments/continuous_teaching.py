@@ -43,7 +43,7 @@ class ContinuousTeaching(gym.Env, ABC):
             )
         self.delta_coeffs = delta_coeffs
 
-        self.obs_dim = n_coeffs + 1 + 1 if reward_type == types['exam_based'] else 0 # one for
+        self.obs_dim = n_coeffs + 1 + (1 if reward_type == types['exam_based'] else 0) # one for
         # repetition rates and one for learned ones
         self.obs = np.zeros((n_item, self.obs_dim))
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
