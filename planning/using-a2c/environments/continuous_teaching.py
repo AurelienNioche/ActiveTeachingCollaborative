@@ -10,6 +10,7 @@ types = {
     'mean_learned': 3
 }
 
+
 class ContinuousTeaching(gym.Env, ABC):
 
     def __init__(
@@ -42,7 +43,8 @@ class ContinuousTeaching(gym.Env, ABC):
             )
         self.delta_coeffs = delta_coeffs
 
-        self.obs_dim = n_coeffs + 1
+        self.obs_dim = n_coeffs + 1 + 1 if reward_type == types['exam_based'] else 0 # one for
+        # repetition rates and one for learned ones
         self.obs = np.zeros((n_item, self.obs_dim))
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
                                                 shape=(n_item * self.obs_dim, ))
@@ -83,9 +85,8 @@ class ContinuousTeaching(gym.Env, ABC):
         self.t = 0
         return self.obs.flatten()
 
-    def compute_reward(self, forget_rate, delta):
+    def compute_reward(self, logp_recall):
 
-        logp_recall = - forget_rate * delta
         above_thr = logp_recall > self.log_tau
         n_learned_now = np.count_nonzero(above_thr)
 
@@ -101,6 +102,9 @@ class ContinuousTeaching(gym.Env, ABC):
                      + self.penalty_coeff * penalizing_factor
 
         elif self.reward_type == types['exam_based']:
+            # print(above_thr)
+            # self.obs[above_thr, 3] = 1
+            # print(self.obs[above_thr, 3])
             if self.t == self.t_max - 1:
                 reward = n_learned_now / self.n_item
             else:
@@ -121,11 +125,11 @@ class ContinuousTeaching(gym.Env, ABC):
         view = self.state[:, 1] > 0
         delta = self.state[view, 0]  # only consider already seen items
         rep = self.state[view, 1] - 1.  # only consider already seen items
-
         forget_rate = self.initial_forget_rates[view] * \
                       (1 - self.initial_repetition_rates[view]) ** rep
+        logp_recall = - forget_rate * delta
 
-        reward = self.compute_reward(forget_rate, delta)
+        reward = self.compute_reward(logp_recall)
 
         # Probability of recall at the time of the next action
         for i in range(self.delta_coeffs.shape[0]):
@@ -133,6 +137,9 @@ class ContinuousTeaching(gym.Env, ABC):
                 -forget_rate *
                 (self.delta_coeffs[i] * delta + self.time_per_iter)
             )
+
+        if self.reward_type == types['exam_based']:
+            self.obs[view, 3] = np.exp(logp_recall) > self.log_tau
 
         info = {}
         self.t += 1

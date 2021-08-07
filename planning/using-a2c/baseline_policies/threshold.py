@@ -6,19 +6,25 @@ class Threshold:
         self.env = env
 
     @staticmethod
-    def extract_p_rec(obs):
+    def extract_p_rec(env):
 
         # If environment is ContinuousTeaching
-        if obs.shape[0] % 2 == 0:
-            obs = obs.reshape((obs.shape[0] // 2, 2))
-        # If environment is DiscontinuousTeaching
-        else:
-            obs = obs[:-1].reshape(((obs.shape[0] - 1) // 2, 2))
-        return obs[:, 0]
+        view = env.state[:, 1] > 0
+        delta = env.state[view, 0]  # only consider already seen items
+        rep = env.state[view, 1] - 1.  # only consider already seen items
+
+        forget_rate = env.initial_forget_rates[view] * \
+                      (1 - env.initial_repetition_rates[view]) ** rep
+        p_recs = np.zeros(shape=(env.state.shape[0]))
+        p_recs[view] = np.exp(
+                -forget_rate *
+                (delta + env.time_per_iter)
+            )
+        return p_recs
 
     def act(self, obs):
 
-        p_rec = self.extract_p_rec(obs)
+        p_rec = self.extract_p_rec(self.env)
 
         view_under_thr = (0 < p_rec) * (p_rec <= self.env.tau)
         if np.count_nonzero(view_under_thr) > 0:
