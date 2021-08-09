@@ -7,7 +7,8 @@ import numpy as np
 types = {
     'monotonic': 1,
     'exam_based': 2,
-    'mean_learned': 3
+    'mean_learned': 3,
+    'eb_exp': 4
 }
 
 
@@ -109,7 +110,8 @@ class ContinuousTeaching(gym.Env, ABC):
                 reward = n_learned_now / self.n_item
             else:
                 reward = 0
-
+        elif self.reward_type == types['eb_exp']:
+            reward = (n_learned_now / self.n_item) * (10 ** (self.t / (self.t_max - 1)))
         reward *= self.reward_coeff
         self.learned_before = above_thr
         return reward

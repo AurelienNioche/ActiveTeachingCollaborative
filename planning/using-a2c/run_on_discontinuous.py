@@ -78,7 +78,7 @@ def run_continuous_teaching(reward_type):
         reward_type=reward_type
     )
 
-    m = A2C(env, seed=123)
+    m = A2C(env)
 
     iterations = env.t_max * 1e5
     check_freq = env.t_max
@@ -93,9 +93,9 @@ def run_continuous_teaching(reward_type):
 
 if __name__ == "__main__":
 
-    for x, y in types.items():
-        print('Running on {}...'.format(x))
-        model = run_continuous_teaching(y)
-        model.env.all_forget_rates.tofile('continuous_runs/forget_{}'.format(x), sep=',', format='%s')
-        model.env.all_repetition_rates.tofile('continuous_runs/repetition_{}'.format(x), sep=',', format='%s')
-        model.save('continuous_runs/run_{}'.format(x))
+    for i in range(5):
+        print('Running on {}...'.format(i))
+        model = run_continuous_teaching(types['eb_exp'])
+        model.env.all_forget_rates.tofile('continuous_runs/forget_{}'.format(i), sep=',', format='%s')
+        model.env.all_repetition_rates.tofile('continuous_runs/repetition_{}'.format(i), sep=',', format='%s')
+        model.save('continuous_runs/run_{}'.format(i))
