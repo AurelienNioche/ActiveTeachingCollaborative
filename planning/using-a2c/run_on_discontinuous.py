@@ -92,10 +92,9 @@ def run_continuous_teaching(reward_type):
 
 
 if __name__ == "__main__":
-    i = 0
     for rc in [1, 1.5, 2, 3, 4]:
-        print('Running on {}...'.format(i))
+        print('Running on {}...'.format(rc))
         model = run_continuous_teaching(types['eb_exp'])
         model.env.all_forget_rates.tofile('continuous_runs/forget_{}'.format(rc), sep=',', format='%s')
         model.env.all_repetition_rates.tofile('continuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
-        model.save('continuous_runs/run_{}'.format(i))
+        model.save('continuous_runs/run_{}'.format(rc))
