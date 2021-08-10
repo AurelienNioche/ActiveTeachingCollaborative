@@ -103,15 +103,13 @@ class ContinuousTeaching(gym.Env, ABC):
                      + self.penalty_coeff * penalizing_factor
 
         elif self.reward_type == types['exam_based']:
-            # print(above_thr)
-            # self.obs[above_thr, 3] = 1
-            # print(self.obs[above_thr, 3])
             if self.t == self.t_max - 1:
                 reward = n_learned_now / self.n_item
             else:
                 reward = 0
         elif self.reward_type == types['eb_exp']:
-            reward = (n_learned_now / self.n_item) * (10 ** (self.t / (self.t_max - 1)))
+            reward = (n_learned_now / self.n_item) * (10 ** (self.reward_coeff * self.t / (self.t_max - 1)))
+            reward /= self.reward_coeff
         reward *= self.reward_coeff
         self.learned_before = above_thr
         return reward

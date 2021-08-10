@@ -62,7 +62,7 @@ def test_discontinuous_teaching():
 
 
 def run_continuous_teaching(reward_type):
-    global n_items
+    global n_items, rc
 
     forget_rates, repetition_rates = produce_rates()
     env = ContinuousTeaching(
@@ -74,7 +74,7 @@ def run_continuous_teaching(reward_type):
         delta_coeffs=np.array([3, 20]),
         n_coeffs=2,
         penalty_coeff=0.2,
-        reward_coeff=20.,
+        reward_coeff=rc,
         reward_type=reward_type
     )
 
@@ -92,10 +92,10 @@ def run_continuous_teaching(reward_type):
 
 
 if __name__ == "__main__":
-
-    for i in range(5):
+    i = 0
+    for rc in [1, 1.5, 2, 3, 4]:
         print('Running on {}...'.format(i))
         model = run_continuous_teaching(types['eb_exp'])
-        model.env.all_forget_rates.tofile('continuous_runs/forget_{}'.format(i), sep=',', format='%s')
-        model.env.all_repetition_rates.tofile('continuous_runs/repetition_{}'.format(i), sep=',', format='%s')
+        model.env.all_forget_rates.tofile('continuous_runs/forget_{}'.format(rc), sep=',', format='%s')
+        model.env.all_repetition_rates.tofile('continuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
         model.save('continuous_runs/run_{}'.format(i))
