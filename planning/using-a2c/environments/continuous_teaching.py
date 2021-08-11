@@ -4,13 +4,7 @@ from abc import ABC
 import gym
 import numpy as np
 
-types = {
-    'monotonic': 1,
-    'exam_based': 2,
-    'mean_learned': 3,
-    'eb_exp': 4
-}
-
+from .reward_types import types
 
 class ContinuousTeaching(gym.Env, ABC):
 
@@ -52,7 +46,6 @@ class ContinuousTeaching(gym.Env, ABC):
         self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
         self.penalty_coeff = penalty_coeff
-        random.seed(123)
         self.n_users = initial_forget_rates.shape[0]
         self.current_user = self.pick_a_user()
         if initial_repetition_rates.shape[1] == n_item and \

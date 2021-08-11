@@ -5,6 +5,8 @@ import numpy as np
 
 import random
 
+from .reward_types import types
+
 
 class DiscontinuousTeaching(gym.Env):
 
@@ -14,14 +16,17 @@ class DiscontinuousTeaching(gym.Env):
             initial_repetition_rates: np.ndarray,
             delta_coeffs: np.array,
             n_coeffs: int = 1,
-            penalty_coeff: float = 0.5,
+            penalty_coeff: float = 0.2,
             tau: float = 0.9,
             n_item: int = 30,                       # 500
             n_session: int = 6,                     # 6
             n_iter_per_session: int = 100,          # 100
             break_length: Union[float, int] = 10,   # 24*60**2
-            time_per_iter: Union[float, int] = 1):  # 4
+            time_per_iter: Union[float, int] = 1,  # 4
+            reward_coeff: float = 1,
+            reward_type=types['monotonic'],
 
+    ):
         super().__init__()
 
         self.action_space = gym.spaces.Discrete(n_item)
@@ -34,13 +39,12 @@ class DiscontinuousTeaching(gym.Env):
                 "Mismatch between delta_coeffs shape and n_coeffs"
             )
         self.delta_coeffs = delta_coeffs
-        self.obs_dim = n_coeffs
+        self.obs_dim = n_coeffs + 1
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
                                                 shape=(n_item * self.obs_dim + 1,))
         self.learned_before = np.zeros((self.n_item, ))
         self.penalty_coeff = penalty_coeff
 
-        random.seed(123)
         self.n_users = initial_forget_rates.shape[0]
         self.current_user = self.pick_a_user()
         if initial_repetition_rates.shape[1] == n_item and \
@@ -58,6 +62,8 @@ class DiscontinuousTeaching(gym.Env):
         self.n_iter_per_session = n_iter_per_session
         self.break_length = break_length
         self.time_per_iter = time_per_iter
+        self.reward_coeff = reward_coeff
+        self.reward_type = reward_type
 
         # Things that need to be reset
         self.state = np.zeros((n_item, 2))
@@ -70,44 +76,55 @@ class DiscontinuousTeaching(gym.Env):
         self.current_user = random.randint(0, self.n_users - 1)
         return self.current_user
 
-    def reset(self):
-        self.state = np.zeros((self.n_item, 2))
-        self.current_user = self.pick_a_user()
-        self.initial_forget_rates = self.all_forget_rates[self.current_user]
-        self.initial_repetition_rates = self.all_repetition_rates[self.current_user]
-        self.obs = np.zeros((self.n_item, self.obs_dim))
-        self.learned_before = np.zeros((self.n_item, ))
-        self.current_iter = 0
-        self.current_ss = 0
-        self.time_elapsed_since_last_iter = 0
-        return self.format_obs(0.)
-
-    def reset_keeping_user(self):
-        self.state = np.zeros((self.n_item, 2))
-        self.obs = np.zeros((self.n_item, self.obs_dim))
-        self.learned_before = np.zeros((self.n_item,))
-        self.current_iter = 0
-        self.current_ss = 0
-        self.time_elapsed_since_last_iter = 0
-        return self.format_obs(0.)
-
-    def reset_for_new_user(self, user):
-        if user >= self.n_users:
-            raise ValueError(
-                "user number more than n_users"
-            )
+    def reset(self, user=None):
+        if not user:
+            user = self.pick_a_user()
         self.current_user = user
         self.state = np.zeros((self.n_item, 2))
         self.initial_forget_rates = self.all_forget_rates[self.current_user]
         self.initial_repetition_rates = self.all_repetition_rates[self.current_user]
         self.obs = np.zeros((self.n_item, self.obs_dim))
-        self.learned_before = np.zeros((self.n_item,))
+        self.learned_before = np.zeros((self.n_item, ))
+        self.obs[:, 2] = self.initial_repetition_rates
+        self.current_iter = 0
+        self.current_ss = 0
         self.time_elapsed_since_last_iter = 0
         return self.format_obs(0.)
 
     def format_obs(self, session_progression):
         return np.hstack(
             (self.obs.flatten(), np.array([session_progression, ])))
+
+    def compute_reward(self, logp_recall):
+        above_thr = logp_recall > self.log_tau
+        n_learned_now = np.count_nonzero(above_thr)
+        penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
+        penalizing_factor /= n_learned_now
+
+        if self.reward_type == types['monotonic']:
+            learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
+            reward = learned_diff
+
+        elif self.reward_type == types['mean_learned']:
+            penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
+            # penalizing_factor /= n_learned_now
+
+            reward = (1 - self.penalty_coeff) * (np.count_nonzero(above_thr) / self.n_item) \
+                     + self.penalty_coeff * penalizing_factor
+
+        elif self.reward_type == types['exam_based']:
+            if self.current_iter == self.n_session * self.n_iter_per_session - 1:
+                reward = n_learned_now / self.n_item
+            else:
+                reward = 0
+        elif self.reward_type == types['eb_exp']:
+            t = self.current_ss * self.n_iter_per_session + self.current_iter
+            t_max = self.n_session * self.n_iter_per_session
+            reward = (n_learned_now / self.n_item) * (10 ** (t / (t_max - 1)))
+
+        reward *= self.reward_coeff
+        self.learned_before = above_thr
+        return reward
 
     def step(self, action):
 
@@ -125,15 +142,7 @@ class DiscontinuousTeaching(gym.Env):
         forget_rate = self.initial_forget_rates[view] * \
               (1 - self.initial_repetition_rates[view]) ** rep
         logp_recall = - forget_rate * delta
-        above_thr = logp_recall > self.log_tau
-        n_learned_now = np.count_nonzero(above_thr)
-        penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
-        penalizing_factor /= n_learned_now
-
-        reward = (1 - self.penalty_coeff) * (np.count_nonzero(above_thr) / self.n_item) \
-                 + self.penalty_coeff * min(penalizing_factor, 0)
-        reward *= (1. / (1. - self.penalty_coeff))
-        self.learned_before = above_thr
+        reward = self.compute_reward(logp_recall)
 
         time_before_next_iter, done = self.next_delta()
         # Probability of recall at the time of the next action
