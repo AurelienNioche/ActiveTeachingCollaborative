@@ -21,13 +21,13 @@ n_items = 30
 
 def produce_rates():
     global n_items, n_users
-    forget_rates, repetition_rates = generate_agents(n_users, n_items, seed=123)
+    forget_rates, repetition_rates = generate_agents(n_users, n_items)
     print("forget", forget_rates.mean())
     print("repeat", repetition_rates.mean())
     return forget_rates, repetition_rates
 
 
-def test_discontinuous_teaching():
+def run_discontinuous_teaching(reward_type):
     global n_items
 
     forget_rates, repetition_rates = produce_rates()
@@ -41,11 +41,12 @@ def test_discontinuous_teaching():
         delta_coeffs=np.array([3, 20]),
         n_coeffs=2,
         n_item=n_items,
-        penalty_coeff=0.2
+        penalty_coeff=0.2,
+        reward_type=reward_type
     )
-    layers_dim = [64, 64, 128]
+    # layers_dim = [64, 64, 128]
     m = A2C(env,
-            net_arch=[{'pi': layers_dim, 'vf': layers_dim}],
+            # net_arch=[{'pi': layers_dim, 'vf': layers_dim}],
             seed=123
         )
 
@@ -92,9 +93,16 @@ def run_continuous_teaching(reward_type):
 
 
 if __name__ == "__main__":
-    for rc in [1, 1.5, 2, 3, 4]:
-        print('Running on {}...'.format(rc))
-        model = run_continuous_teaching(types['eb_exp'])
-        model.env.all_forget_rates.tofile('continuous_runs/forget_{}'.format(rc), sep=',', format='%s')
-        model.env.all_repetition_rates.tofile('continuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
-        model.save('continuous_runs/run_{}'.format(rc))
+    # for rc in [1, 1.5, 2, 3, 4]:
+    #     print('Running on {}...'.format(rc))
+    #     model = run_discontinuous_teaching(types['eb_exp'])
+    #     model.env.all_forget_rates.tofile('continuous_runs/forget_{}'.format(rc), sep=',', format='%s')
+    #     model.env.all_repetition_rates.tofile('continuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
+    #     model.save('continuous_runs/run_{}'.format(rc))
+
+    for r, i in types.items():
+        print('Running on {}...'.format(r))
+        model = run_discontinuous_teaching(types[r])
+        model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(r), sep=',', format='%s')
+        model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(r), sep=',', format='%s')
+        model.save('continuous_runs/run_{}'.format(r))
