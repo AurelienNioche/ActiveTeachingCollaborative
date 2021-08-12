@@ -61,6 +61,7 @@ class ContinuousTeaching(gym.Env, ABC):
         # self.reward_range = (- reward_coeff, reward_coeff)
         self.reward_coeff = reward_coeff
         self.reward_type = reward_type
+        self.last_entropy = 0
 
     def pick_a_user(self):
         self.current_user = random.randint(0, self.n_users - 1)
@@ -101,8 +102,13 @@ class ContinuousTeaching(gym.Env, ABC):
             else:
                 reward = 0
         elif self.reward_type == types['eb_exp']:
-            reward = (n_learned_now / self.n_item) * (10 ** (self.reward_coeff * self.t / (self.t_max - 1)))
-            reward /= self.reward_coeff
+            # actions_entropy = entropy(self.state[:, 1] / np.sum(self.state[:, 1]))
+            # reward = ((n_learned_now / self.n_item) + (actions_entropy - self.last_entropy)) *\
+            #          (10 ** (self.reward_coeff * self.t / (self.t_max - 1)))
+            # self.last_entropy = actions_entropy
+            reward = 10 ** (n_learned_now / self.n_item)
+            # reward /= self.reward_coeff
+        # print(reward)
         reward *= self.reward_coeff
         self.learned_before = above_thr
         return reward
