@@ -16,7 +16,7 @@ from human_agents import generate_agents
 
 sns.set()
 n_users = 5
-n_items = 30
+n_items = 60
 
 
 def produce_rates():
@@ -93,17 +93,17 @@ def run_continuous_teaching(reward_type):
 
 
 if __name__ == "__main__":
-    # for rc in [1, 1.5, 2, 3, 4]:
-    #     print('Running on {}...'.format(rc))
-    #     model = run_continuous_teaching(types['eb_exp'])
-    #     model.env.all_forget_rates.tofile('continuous_runs/forget_{}'.format(rc), sep=',', format='%s')
-    #     model.env.all_repetition_rates.tofile('continuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
-    #     model.save('continuous_runs/run_{}'.format(rc))
+    for rc in [1, 1.5, 2, 3, 4]:
+        print('Running on {}...'.format(rc))
+        model = run_discontinuous_teaching(types['eb_exp'])
+        model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
+        model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
+        model.save('discontinuous_runs/run_{}'.format(rc))
 
-    for r, i in types.items():
-        if i > 2:
-            print('Running on {}...'.format(r))
-            model = run_discontinuous_teaching(types[r])
-            model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(r), sep=',', format='%s')
-            model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(r), sep=',', format='%s')
-            model.save('discontinuous_runs/run_{}'.format(r))
+    # for r, i in types.items():
+    #     if i > 2:
+    #         print('Running on {}...'.format(r))
+    #         model = run_discontinuous_teaching(types[r])
+    #         model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(r), sep=',', format='%s')
+    #         model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(r), sep=',', format='%s')
+    #         model.save('discontinuous_runs/run_{}'.format(r))
