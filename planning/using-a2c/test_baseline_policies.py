@@ -18,7 +18,9 @@ from human_agents import generate_agents
 
 def create_env(seed=123, n_users=30, n_items=200,
                penalty_coeff=0, reward_type='mean_learned',
-               tau=0.9, break_length=24 * 60 ** 2,
+               tau=0.9,
+               n_session=6,
+               break_length=24 * 60 ** 2,
                time_per_iter=3,
                n_iter_session=100):
 
@@ -28,6 +30,7 @@ def create_env(seed=123, n_users=30, n_items=200,
     env = DiscontinuousTeaching(
         tau=tau,
         n_item=n_items,
+        n_session=n_session,
         break_length=break_length,
         time_per_iter=time_per_iter,
         n_iter_per_session=n_iter_session,
@@ -36,82 +39,62 @@ def create_env(seed=123, n_users=30, n_items=200,
         delta_coeffs=np.array([3, 20]),
         n_coeffs=2,
         penalty_coeff=penalty_coeff,
-        reward_type=reward_types[reward_type]
-    )
+        reward_type=reward_types[reward_type])
 
     return env
 
 
-def test_threshold():
-
-    env = create_env()
-
-    # Try Myopic ----------------------------------
-    policy = Threshold(env=env)
+def run(env, policy):
     rewards = []
     actions = []
 
     obs = env.reset()
-    while True:
-        action = policy.act(obs)
-        obs, reward, done, _ = env.step(action)
-        rewards.append(reward)
-        actions.append(action)
-        if done:
-            break
 
+    with tqdm(total=env.n_iter_per_session * env.n_session) as pb:
+        while True:
+            action = policy.act(obs)
+            obs, reward, done, _ = env.step(action)
+            rewards.append(reward)
+            actions.append(action)
+            if done:
+                # Simulate exam
+                obs, reward, done, _ = env.step(None)
+                rewards.append(reward)
+                break
+
+            pb.update()
+
+    final_n_learned = reward * env.n_item
+    n_view = len(np.unique(np.asarray(actions)))
+    print(f"{policy.__class__.__name__.lower()} |"
+          f" final reward {int(final_n_learned)} | precision {final_n_learned / n_view:.2f}")
+    return actions, rewards
+
+
+def test_myopic(seed=123):
+
+    env = create_env(seed=seed)
+    policy = Threshold(env=env)
+
+    actions, rewards = run(env=env, policy=policy)
     plot(actions=actions, rewards=rewards, env=env, title="threshold")
 
 
-def test_conservative():
+def test_conservative(seed=123):
 
-    env = create_env()
-
-    # Try Conservative ----------------------------------
+    env = create_env(seed=seed)
     policy = Conservative(env=env)
-    rewards = []
-    actions = []
 
-    obs = env.reset()
-
-    with tqdm(total=env.n_iter_per_session*env.n_session) as pb:
-        while True:
-            action = policy.act(obs)
-            obs, reward, done, _ = env.step(action)
-            rewards.append(reward)
-            actions.append(action)
-
-            pb.update()
-
-            if done:
-                break
-
+    actions, rewards = run(env=env, policy=policy)
     plot(actions=actions, rewards=rewards, env=env, title="conservative")
 
 
-def test_leitner():
+def test_leitner(seed=123):
 
-    env = create_env()
-
-    # Try Leitner ----------------------------------
+    env = create_env(seed=seed)
     policy = Leitner(env=env, delay_factor=2, delay_min=3)
-    rewards = []
-    actions = []
 
-    obs = env.reset()
-
-    with tqdm(total=env.n_iter_per_session*env.n_session) as pb:
-        while True:
-            action = policy.act(obs)
-            obs, reward, done, _ = env.step(action)
-            rewards.append(reward)
-            actions.append(action)
-
-            pb.update()
-
-            if done:
-                break
-
+    actions, rewards = run(env=env, policy=policy)
     plot(actions=actions, rewards=rewards, env=env, title="leitner")
 
 
@@ -135,9 +118,11 @@ def plot(actions, rewards, env, title=""):
 
 
 def main():
-    test_leitner()
-    # test_threshold()
-    # test_conservative()
+
+    seed = 0
+    test_leitner(seed=seed)
+    test_myopic(seed=seed)
+    test_conservative(seed=seed)
 
 
 if __name__ == "__main__":

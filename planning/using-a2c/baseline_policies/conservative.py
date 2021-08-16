@@ -41,17 +41,14 @@ class Conservative:
             initial_forget_rates,
             initial_repetition_rates):
 
-        n_item = n_pres.shape[0]
-
         view = n_pres > 0
-        rep = n_pres[view] - 1
+        rep = n_pres[view] - 1.
         delta = delta[view]
 
-        init_forget = initial_forget_rates[:n_item][view]
-        rep_effect = initial_repetition_rates[:n_item][view]
+        init_forget = initial_forget_rates[np.nonzero(view)]
+        rep_effect = initial_repetition_rates[np.nonzero(view)]
 
-        forget_rate = init_forget * \
-            (1 - rep_effect) ** rep
+        forget_rate = init_forget * (1 - rep_effect) ** rep
         logp_recall = - forget_rate * delta
         return logp_recall
 
@@ -85,15 +82,15 @@ class Conservative:
         # ...specific for item shown
         delta[item] = time_elapsed
         # increment number of presentation
-        n_pres += 1
+        n_pres[item] += 1
 
         return n_pres, delta, current_iter, current_ss, done
 
     def _get_env_delta(self):
-        return self.env.state[:, 0].copy()
+        return self.env.state[:, 0]
 
     def _get_env_n_pres(self):
-        return self.env.state[:, 1].copy()
+        return self.env.state[:, 1]
 
     def act(self, obs):
 
@@ -129,7 +126,12 @@ class Conservative:
             delta = delta_current[:n_item].copy()
 
             n_pres, delta, current_iter, current_ss, done = \
-                self.step(first_item, n_pres, delta, current_iter, current_ss)
+                self.step(
+                    item=first_item,
+                    n_pres=n_pres,
+                    delta=delta,
+                    current_iter=current_iter,
+                    current_ss=current_ss)
 
             # Do rollouts...
             while not done:
@@ -153,7 +155,7 @@ class Conservative:
             if n_learnt == n_item:
                 break
 
-            n_item = first_item
+            n_item -= 1
             if n_item <= 1:
                 break
 

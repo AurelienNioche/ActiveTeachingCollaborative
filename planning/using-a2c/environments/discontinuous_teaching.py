@@ -3,8 +3,6 @@ from typing import Union
 import gym
 import numpy as np
 
-import random
-
 from .reward_types import types
 
 
@@ -73,7 +71,7 @@ class DiscontinuousTeaching(gym.Env):
         self.time_elapsed_since_last_iter = 0
 
     def pick_a_user(self):
-        self.current_user = random.randint(0, self.n_users - 1)
+        self.current_user = np.random.randint(self.n_users)
         return self.current_user
 
     def reset(self, user=None):
@@ -98,8 +96,9 @@ class DiscontinuousTeaching(gym.Env):
     def compute_reward(self, logp_recall):
         above_thr = logp_recall > self.log_tau
         n_learned_now = np.count_nonzero(above_thr)
-        penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
-        penalizing_factor /= n_learned_now
+        # penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
+        # if n_learned_now > 0:
+        #     penalizing_factor /= n_learned_now
 
         if self.reward_type == types['monotonic']:
             learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
@@ -131,10 +130,11 @@ class DiscontinuousTeaching(gym.Env):
 
         # increase delta for all items
         self.state[:, 0] += self.time_elapsed_since_last_iter
-        # ...except for item shown
-        self.state[action, 0] = 0
-        # increment number of presentation
-        self.state[action, 1] += 1
+        if action is not None:
+            # ...except for item shown
+            self.state[action, 0] = 0
+            # increment number of presentation
+            self.state[action, 1] += 1
 
         view = self.state[:, 1] > 0
         delta = self.state[view, 0]
