@@ -118,7 +118,8 @@ class DiscontinuousTeaching(gym.Env):
             else:
                 reward = 0
         elif self.reward_type == types['eb_exp']:
-            reward = 10 ** (n_learned_now / self.n_item)
+            reward = 100 ** (n_learned_now / self.n_item)
+            reward /= 100
 
         reward *= self.reward_coeff
         self.learned_before = above_thr
