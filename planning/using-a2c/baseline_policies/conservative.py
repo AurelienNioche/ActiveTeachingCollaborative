@@ -89,6 +89,12 @@ class Conservative:
 
         return n_pres, delta, current_iter, current_ss, done
 
+    def _get_env_delta(self):
+        return self.env.state[:, 0].copy()
+
+    def _get_env_n_pres(self):
+        return self.env.state[:, 1].copy()
+
     def act(self, obs):
 
         initial_forget_rates \
@@ -101,8 +107,8 @@ class Conservative:
 
         n_item = self.env.n_item
 
-        delta_current = self.env.state[:, 0].copy()
-        n_pres_current = self.env.state[:, 1].copy()
+        delta_current = self._get_env_delta()
+        n_pres_current = self._get_env_n_pres()
 
         # Reduce the number of item to learn
         # until every item presented is learnable

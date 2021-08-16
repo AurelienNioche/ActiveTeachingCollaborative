@@ -13,6 +13,15 @@ class Leitner:
         self.box = np.full(self.n_item, -1)
         self.due = np.full(self.n_item, -1)
 
+        # Adaptation for RL env
+        self._env = env
+        self._last_was_success = None
+        self._last_time_reply = None
+        self._idx_last_q = None
+        self._now = 0
+        self._current_iter = 0
+        self._current_ss = 0
+
     def update_box_and_due_time(self, last_idx,
                                 last_was_success, last_time_reply):
 
@@ -63,10 +72,70 @@ class Leitner:
 
         return item_idx
 
+    def _step(self):
+
+        # done = False
+
+        # update progression within session, and between session
+        # - which iteration the learner is at?
+        # - which session the learner is at?
+        self._current_iter += 1
+        if self._current_iter >= self._env.n_iter_per_session:
+            self._current_iter = 0
+            self._current_ss += 1
+            time_elapsed = self._env.break_length
+        else:
+            time_elapsed = self._env.time_per_iter
+
+        # if self.current_ss >= self._env.n_session:
+        #     done = True
+
+        self._last_time_reply = self._now
+        self._now += time_elapsed
+
+    def _get_env_delta(self):
+        return self._env.state[:, 0]
+
+    def _get_env_n_pres(self):
+        return self._env.state[:, 1]
+
+    def _get_env_init_forget_rate(self, item):
+        return self._env.all_forget_rates[self._env.current_user, item]
+
+    def _get_env_rep_effect(self, item):
+        return self._env.all_repetition_rates[self._env.current_user, item]
+
     def act(self, obs):
 
         """
         Adaptation for RL env
         """
 
-        # TODO: Adapt the code
+        item = self.ask(
+            now=self._now,
+            last_was_success=self._last_was_success,
+            last_time_reply=self._last_time_reply,
+            idx_last_q=self._idx_last_q)
+
+        delta_current = self._get_env_delta()
+        n_pres_current = self._get_env_n_pres()
+
+        if n_pres_current[item] == 0:
+            success = False
+
+        else:
+            init_forget = self._get_env_init_forget_rate(item)
+            rep_effect = self._get_env_rep_effect(item)
+
+            rep = n_pres_current[item] - 1
+            delta = delta_current[item]
+
+            forget_rate = init_forget * \
+                (1 - rep_effect) ** rep
+            p = np.exp(- forget_rate * delta)
+            success = p > np.random.random()
+
+        self._step()
+        self._idx_last_q = item
+        self._last_was_success = success
+        return item
