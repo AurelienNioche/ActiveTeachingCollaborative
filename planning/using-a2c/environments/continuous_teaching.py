@@ -6,6 +6,7 @@ import numpy as np
 
 from .reward_types import types
 
+
 class ContinuousTeaching(gym.Env, ABC):
 
     def __init__(
@@ -61,7 +62,6 @@ class ContinuousTeaching(gym.Env, ABC):
         # self.reward_range = (- reward_coeff, reward_coeff)
         self.reward_coeff = reward_coeff
         self.reward_type = reward_type
-        self.last_entropy = 0
 
     def pick_a_user(self):
         self.current_user = random.randint(0, self.n_users - 1)

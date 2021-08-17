@@ -1,23 +1,30 @@
-def run_one_episode(env, policy, user=None, zero_penalty_coeff=False, is_a2c=True):
+import numpy as np
+from tqdm import tqdm
+
+
+def run_one_episode(env, policy, user=None):
     rewards = []
     actions = []
-    if user is not None:
-        obs = env.reset(user)
-    else:
-        obs = env.reset(env.current_user)
-    pc = env.penalty_coeff
-    if zero_penalty_coeff:
-        env.penalty_coeff=0.0
-    while True:
-        if is_a2c:
-            action = policy.predict(obs, deterministic=True)
-        else:
+
+    obs = env.reset(user)
+
+    with tqdm(total=env.n_iter_per_session * env.n_session) as pb:
+        while True:
             action = policy.act(obs)
-        obs, reward, done, info = env.step(action)
-        rewards.append(reward / env.reward_coeff)
-        actions.append(action)
-        if done:
-            obs = env.reset(env.current_user)
-            break
-    env.penalty_coeff = pc
+            obs, reward, done, _ = env.step(action)
+            rewards.append(reward)
+            actions.append(action)
+            if done:
+                # Simulate exam
+                obs, reward, done, _ = env.step(None)
+                rewards.append(reward)
+                break
+
+            pb.update()
+
+    final_n_learned = reward * env.n_item
+    n_view = len(np.unique(np.asarray(actions)))
+    print(f"{policy.__class__.__name__.lower()} | "
+          f"final reward {int(final_n_learned)} | "
+          f"precision {final_n_learned / n_view:.2f}")
     return rewards, actions

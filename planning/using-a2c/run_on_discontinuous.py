@@ -28,7 +28,7 @@ def produce_rates():
     return forget_rates, repetition_rates
 
 
-def run_discontinuous_teaching(reward_type, forgets, repetitions):
+def run_discontinuous_teaching(reward_type, forgets, repetitions, gamma):
     global n_items
 
     # forget_rates, repetition_rates = produce_rates()
@@ -40,10 +40,10 @@ def run_discontinuous_teaching(reward_type, forgets, repetitions):
         initial_forget_rates=forgets,
         initial_repetition_rates=repetitions,
         delta_coeffs=np.array([3, 20]),
-        n_coeffs=2,
         n_item=n_items,
         penalty_coeff=0.2,
-        reward_type=reward_type
+        reward_type=reward_type,
+        gamma=gamma
     )
     # layers_dim = [64, 64, 128]
     m = A2C(env,
@@ -52,7 +52,7 @@ def run_discontinuous_teaching(reward_type, forgets, repetitions):
         )
 
     env_t_max = env.n_session * env.n_iter_per_session
-    iterations = env_t_max * 30000
+    iterations = env_t_max * 20000
     check_freq = env_t_max
 
     with ProgressBarCallback(env, check_freq) as callback:
@@ -96,14 +96,14 @@ def run_continuous_teaching(reward_type):
 if __name__ == "__main__":
     # for rc in [1, 1.5, 2, 3, 4]:
     #     print('Running on {}...'.format(rc))
-    for i in range(4):
+    for i in range(1, 6):
         forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
         repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
         forgets = np.array(forgets)[0]
         forgets = np.reshape(forgets, newshape=(n_users, n_items))
         repetitions = np.array(repetitions)[0]
         repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        model = run_discontinuous_teaching(types['eb_exp'], forgets, repetitions)
+        model = run_discontinuous_teaching(types['exam_based'], forgets, repetitions, i)
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
     # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')

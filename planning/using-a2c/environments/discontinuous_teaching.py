@@ -22,7 +22,7 @@ class DiscontinuousTeaching(gym.Env):
             time_per_iter: Union[float, int] = 1,  # 4
             reward_coeff: float = 1,
             reward_type=types['monotonic'],
-
+            gamma=1
     ):
         super().__init__()
 
@@ -38,7 +38,7 @@ class DiscontinuousTeaching(gym.Env):
                 "The length of delta_coeffs should be superior or equal to 1"
             )
         self.delta_coeffs = delta_coeffs
-        self.obs_dim = n_coeffs + 1
+        self.obs_dim = n_coeffs + 2
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
                                                 shape=(n_item * self.obs_dim + 1,))
         self.learned_before = np.zeros((self.n_item, ))
@@ -59,6 +59,7 @@ class DiscontinuousTeaching(gym.Env):
 
         self.n_session = n_session
         self.n_iter_per_session = n_iter_per_session
+        self.t_max = n_session * n_iter_per_session
         self.break_length = break_length
         self.time_per_iter = time_per_iter
         self.reward_coeff = reward_coeff
@@ -70,6 +71,7 @@ class DiscontinuousTeaching(gym.Env):
         self.current_iter = 0
         self.current_ss = 0
         self.time_elapsed_since_last_iter = 0
+        self.gamma = gamma
 
     def pick_a_user(self):
         self.current_user = np.random.randint(self.n_users)
@@ -85,6 +87,7 @@ class DiscontinuousTeaching(gym.Env):
         self.obs = np.zeros((self.n_item, self.obs_dim))
         self.learned_before = np.zeros((self.n_item, ))
         self.obs[:, 2] = self.initial_repetition_rates
+        self.obs[:, 3] = self.initial_forget_rates
         self.current_iter = 0
         self.current_ss = 0
         self.time_elapsed_since_last_iter = 0
@@ -113,15 +116,18 @@ class DiscontinuousTeaching(gym.Env):
                      + self.penalty_coeff * penalizing_factor
 
         elif self.reward_type == types['exam_based']:
-            if self.current_iter == self.n_session * self.n_iter_per_session - 1:
-                reward = n_learned_now / self.n_item
-            else:
-                reward = 0
+            reward = 10 ** (n_learned_now / self.n_item)
+            # reward /= 100
+            learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
+            if learned_diff < 0:
+                reward += self.gamma * learned_diff * (10 ** (self.current_iter / self.t_max))
+
         elif self.reward_type == types['eb_exp']:
-            reward = 100 ** (n_learned_now / self.n_item)
-            reward /= 100
+            reward = 10 ** (n_learned_now / self.n_item)
+            # reward /= 100
 
         reward *= self.reward_coeff
+
         self.learned_before = above_thr
         return reward
 

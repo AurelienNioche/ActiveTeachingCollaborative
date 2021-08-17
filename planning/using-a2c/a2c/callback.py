@@ -62,7 +62,8 @@ class ProgressBarCallback:
                     break
             self.hist_rewards.append(rewards)
             self.pbar.set_postfix({"average-reward": f"{np.mean(rewards):.4f}",
-                                   "max-reward": f"{np.max(rewards):.4f}"})
+                                   "max-reward": f"{np.max(rewards):.4f}",
+                                   "min-reward": f"{np.min(rewards):.4f}"})
         return True
 
     def __enter__(self):
