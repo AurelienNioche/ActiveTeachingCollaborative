@@ -155,8 +155,8 @@ class Conservative:
             if n_learnt == n_item:
                 break
 
-            n_item -= 1
+            n_item = first_item
             if n_item <= 1:
-                break
+                return 0
 
         return first_item
