@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
     # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
-        model.save('discontinuous_runs/run_{}'.format(i))
+        model.save('discontinuous_runs/eb_run_{}'.format(i))
 
     # for r, i in types.items():
     #     if i > 2:
