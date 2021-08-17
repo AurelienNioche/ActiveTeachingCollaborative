@@ -10,14 +10,16 @@ from baseline_policies.leitner import Leitner
 
 #  from environments.continuous_teaching import ContinuousTeaching
 from environments.discontinuous_teaching import DiscontinuousTeaching
-
 from environments.reward_types import types as reward_types
 
 from human_agents import generate_agents
 
 
-def create_env(seed=123, n_users=30, n_items=200,
-               penalty_coeff=0, reward_type='mean_learned',
+def create_env(seed=123,
+               n_users=30,
+               n_items=200,
+               penalty_coeff=0,
+               reward_type='mean_learned',
                tau=0.9,
                n_session=6,
                break_length=24 * 60 ** 2,
@@ -37,7 +39,6 @@ def create_env(seed=123, n_users=30, n_items=200,
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
         delta_coeffs=np.array([3, 20]),
-        n_coeffs=2,
         penalty_coeff=penalty_coeff,
         reward_type=reward_types[reward_type])
 
@@ -66,8 +67,9 @@ def run(env, policy):
 
     final_n_learned = reward * env.n_item
     n_view = len(np.unique(np.asarray(actions)))
-    print(f"{policy.__class__.__name__.lower()} |"
-          f" final reward {int(final_n_learned)} | precision {final_n_learned / n_view:.2f}")
+    print(f"{policy.__class__.__name__.lower()} | "
+          f"final reward {int(final_n_learned)} | "
+          f"precision {final_n_learned / n_view:.2f}")
     return actions, rewards
 
 
@@ -77,7 +79,7 @@ def test_myopic(seed=123):
     policy = Threshold(env=env)
 
     actions, rewards = run(env=env, policy=policy)
-    plot(actions=actions, rewards=rewards, env=env, title="threshold")
+    plot(actions=actions, rewards=rewards, env=env, policy=policy)
 
 
 def test_conservative(seed=123):
@@ -86,7 +88,7 @@ def test_conservative(seed=123):
     policy = Conservative(env=env)
 
     actions, rewards = run(env=env, policy=policy)
-    plot(actions=actions, rewards=rewards, env=env, title="conservative")
+    plot(actions=actions, rewards=rewards, env=env, policy=policy)
 
 
 def test_leitner(seed=123):
@@ -95,10 +97,12 @@ def test_leitner(seed=123):
     policy = Leitner(env=env, delay_factor=2, delay_min=3)
 
     actions, rewards = run(env=env, policy=policy)
-    plot(actions=actions, rewards=rewards, env=env, title="leitner")
+    plot(actions=actions, rewards=rewards, env=env, policy=policy)
 
 
-def plot(actions, rewards, env, title=""):
+def plot(actions, rewards, env, policy):
+
+    title = policy.__class__.__name__.lower()
 
     n_learned = np.array(rewards) * env.n_item
 

@@ -74,8 +74,6 @@ class Leitner:
 
     def _step(self):
 
-        # done = False
-
         # update progression within session, and between session
         # - which iteration the learner is at?
         # - which session the learner is at?
@@ -86,9 +84,6 @@ class Leitner:
             time_elapsed = self._env.break_length
         else:
             time_elapsed = self._env.time_per_iter
-
-        # if self.current_ss >= self._env.n_session:
-        #     done = True
 
         self._last_time_reply = self._now
         self._now += time_elapsed

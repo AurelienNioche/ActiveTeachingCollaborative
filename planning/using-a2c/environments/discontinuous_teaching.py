@@ -13,7 +13,6 @@ class DiscontinuousTeaching(gym.Env):
             initial_forget_rates: np.ndarray,
             initial_repetition_rates: np.ndarray,
             delta_coeffs: np.array,
-            n_coeffs: int = 1,
             penalty_coeff: float = 0.2,
             tau: float = 0.9,
             n_item: int = 30,                       # 500
@@ -32,9 +31,11 @@ class DiscontinuousTeaching(gym.Env):
 
         self.tau = tau
         self.log_tau = np.log(self.tau)
-        if delta_coeffs.shape[0] != n_coeffs:
+
+        n_coeffs = delta_coeffs.shape[0]
+        if n_coeffs < 1:
             raise ValueError(
-                "Mismatch between delta_coeffs shape and n_coeffs"
+                "The length of delta_coeffs should be superior or equal to 1"
             )
         self.delta_coeffs = delta_coeffs
         self.obs_dim = n_coeffs + 1
