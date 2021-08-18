@@ -106,7 +106,10 @@ class DiscontinuousTeaching(gym.Env):
 
         if self.reward_type == types['monotonic']:
             learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
-            reward = learned_diff
+            if learned_diff > 0:
+                reward = n_learned_now / (self.gamma * self.n_iter_per_session)
+            else:
+                reward = learned_diff
 
         elif self.reward_type == types['mean_learned']:
             penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)

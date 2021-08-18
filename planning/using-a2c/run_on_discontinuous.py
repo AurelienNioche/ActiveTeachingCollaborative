@@ -104,8 +104,8 @@ if __name__ == "__main__":
         forgets = np.reshape(forgets, newshape=(n_users, n_items))
         repetitions = np.array(repetitions)[0]
         repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        model = run_discontinuous_teaching(types['exam_based'], forgets, repetitions, i)
-        model.save('discontinuous_runs/eb_run_{}'.format(i))
+        model = run_discontinuous_teaching(types['monotonic'], forgets, repetitions, i)
+        model.save('discontinuous_runs/monotonic_run_{}'.format(i))
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
     # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
