@@ -117,10 +117,10 @@ class DiscontinuousTeaching(gym.Env):
 
         elif self.reward_type == types['exam_based']:
             reward = 10 ** (n_learned_now / self.n_item)
-            # reward /= 100
             learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
             if learned_diff < 0:
-                reward += self.gamma * learned_diff * (10 ** (self.current_iter / self.t_max))
+                n_step = self.current_ss * self.n_iter_per_session + self.current_iter
+                reward += self.gamma * learned_diff * (10 ** (n_step / self.t_max))
 
         elif self.reward_type == types['eb_exp']:
             reward = 10 ** (n_learned_now / self.n_item)
