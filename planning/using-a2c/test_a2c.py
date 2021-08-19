@@ -40,7 +40,7 @@ def test_continuous_teaching():
 
     forget_rates, repetition_rates = produce_rates()
     env = ContinuousTeaching(
-        t_max=100,
+        t_max=50,
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
         n_item=n_items,
@@ -49,7 +49,7 @@ def test_continuous_teaching():
         n_coeffs=2,
         penalty_coeff=0.2,
         reward_coeff=20.,
-        reward_type=types['eb_exp']
+        reward_type=types['exam_based']
     )
 
     model = A2C(env, seed=123)
@@ -76,7 +76,6 @@ def test_discontinuous_teaching():
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
         delta_coeffs=np.array([3, 20]),
-        n_coeffs=2,
         penalty_coeff=0.3
     )
     model = A2C(env, seed=123)

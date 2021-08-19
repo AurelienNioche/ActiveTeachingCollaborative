@@ -39,7 +39,7 @@ class ContinuousTeaching(gym.Env, ABC):
             )
         self.delta_coeffs = delta_coeffs
 
-        self.obs_dim = n_coeffs + 1 + (1 if reward_type == types['exam_based'] else 0) # one for
+        self.obs_dim = n_coeffs + 2 + (1 if reward_type == types['exam_based'] else 0) # one for
         # repetition rates and one for learned ones
         self.obs = np.zeros((n_item, self.obs_dim))
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
@@ -76,6 +76,7 @@ class ContinuousTeaching(gym.Env, ABC):
         self.initial_repetition_rates = self.all_repetition_rates[user]
         self.obs = np.zeros((self.n_item, self.obs_dim))
         self.obs[:, 2] = self.initial_repetition_rates
+        self.obs[:, 3] = self.initial_forget_rates
         self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
         return self.obs.flatten()
@@ -91,7 +92,6 @@ class ContinuousTeaching(gym.Env, ABC):
 
         elif self.reward_type == types['mean_learned']:
             penalizing_factor = n_learned_now - np.count_nonzero(self.learned_before)
-            # penalizing_factor /= n_learned_now
 
             reward = (1 - self.penalty_coeff) * (np.count_nonzero(above_thr) / self.n_item) \
                      + self.penalty_coeff * penalizing_factor
@@ -102,13 +102,8 @@ class ContinuousTeaching(gym.Env, ABC):
             else:
                 reward = 0
         elif self.reward_type == types['eb_exp']:
-            # actions_entropy = entropy(self.state[:, 1] / np.sum(self.state[:, 1]))
-            # reward = ((n_learned_now / self.n_item) + (actions_entropy - self.last_entropy)) *\
-            #          (10 ** (self.reward_coeff * self.t / (self.t_max - 1)))
-            # self.last_entropy = actions_entropy
             reward = 10 ** (n_learned_now / self.n_item)
-            # reward /= self.reward_coeff
-        # print(reward)
+
         reward *= self.reward_coeff
         self.learned_before = above_thr
         return reward
@@ -138,7 +133,7 @@ class ContinuousTeaching(gym.Env, ABC):
             )
 
         if self.reward_type == types['exam_based']:
-            self.obs[view, 3] = np.exp(logp_recall) > self.log_tau
+            self.obs[view, 4] = np.exp(logp_recall) > self.log_tau
 
         info = {}
         self.t += 1

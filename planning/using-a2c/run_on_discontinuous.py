@@ -65,7 +65,7 @@ def run_discontinuous_teaching(reward_type, forgets, repetitions, gamma):
 
 
 def run_continuous_teaching(reward_type):
-    global n_items, rc
+    global n_items
 
     forget_rates, repetition_rates = produce_rates()
     env = ContinuousTeaching(
@@ -77,7 +77,6 @@ def run_continuous_teaching(reward_type):
         delta_coeffs=np.array([3, 20]),
         n_coeffs=2,
         penalty_coeff=0.2,
-        reward_coeff=rc,
         reward_type=reward_type
     )
 
@@ -97,16 +96,17 @@ def run_continuous_teaching(reward_type):
 if __name__ == "__main__":
     # for rc in [1, 1.5, 2, 3, 4]:
     #     print('Running on {}...'.format(rc))
-    for i in [4, 8, 12, 20, 30]:
+    for i in [4]: #, 8, 12, 20, 30]:
         print('Running on {}...'.format(i))
-        forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
-        repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
-        forgets = np.array(forgets)[0]
-        forgets = np.reshape(forgets, newshape=(n_users, n_items))
-        repetitions = np.array(repetitions)[0]
-        repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        model = run_discontinuous_teaching(types['monotonic'], forgets, repetitions, i)
-        model.save('discontinuous_runs/monotonic_{}'.format(i))
+        # forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
+        # repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
+        # forgets = np.array(forgets)[0]
+        # forgets = np.reshape(forgets, newshape=(n_users, n_items))
+        # repetitions = np.array(repetitions)[0]
+        # repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
+        # model = run_discontinuous_teaching(types['monotonic'], forgets, repetitions, i)
+        model = run_continuous_teaching(types['exam_based'])
+        model.save('continuous_runs/exam_based_{}'.format(i))
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
     # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
