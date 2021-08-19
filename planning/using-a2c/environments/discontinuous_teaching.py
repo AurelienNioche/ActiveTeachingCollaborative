@@ -129,6 +129,19 @@ class DiscontinuousTeaching(gym.Env):
             reward = 10 ** (n_learned_now / self.n_item)
             # reward /= 100
 
+        elif self.reward_type == types['precision']:
+            reward = n_learned_now / np.count_nonzero(self.state[:, 1])
+
+        elif self.reward_type == types['base']:
+            reward = n_learned_now / self.n_item
+
+        elif self.reward_type == types['avoid_forget']:
+            session_progression = self.session_progression()
+            reward = n_learned_now / self.n_item
+            if session_progression == 0:
+                learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
+                reward += learned_diff * self.gamma
+
         reward *= self.reward_coeff
 
         self.learned_before = above_thr

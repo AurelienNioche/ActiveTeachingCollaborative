@@ -34,9 +34,10 @@ def run_discontinuous_teaching(reward_type, forgets, repetitions, gamma):
     # forget_rates, repetition_rates = produce_rates()
     env = DiscontinuousTeaching(
         tau=0.9,
-        break_length=24 * 60 ** 2,
+        break_length=3 * 60 ** 2,
         time_per_iter=3,
         n_iter_per_session=100,
+        n_session=5,
         initial_forget_rates=forgets,
         initial_repetition_rates=repetitions,
         delta_coeffs=np.array([3, 20]),
@@ -96,7 +97,7 @@ def run_continuous_teaching(reward_type):
 if __name__ == "__main__":
     # for rc in [1, 1.5, 2, 3, 4]:
     #     print('Running on {}...'.format(rc))
-    for i in [0.5, 1, 2, 3, 4]:
+    for i in [1, 2, 5, 10, 20]:
         print('Running on {}...'.format(i))
         forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
         repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
@@ -104,8 +105,8 @@ if __name__ == "__main__":
         forgets = np.reshape(forgets, newshape=(n_users, n_items))
         repetitions = np.array(repetitions)[0]
         repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        model = run_discontinuous_teaching(types['monotonic'], forgets, repetitions, i)
-        model.save('discontinuous_runs/monotonic_run_{}'.format(i))
+        model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
+        model.save('discontinuous_runs/avoid_forget_{}'.format(i))
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
     # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')

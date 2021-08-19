@@ -2,25 +2,22 @@ import numpy as np
 from tqdm import tqdm
 
 
-def run_one_episode(env, policy, user=None):
+def run_one_episode(env, policy, user=None, sim_exam=True):
     rewards = []
     actions = []
 
     obs = env.reset(user)
 
-    with tqdm(total=env.n_iter_per_session * env.n_session) as pb:
-        while True:
-            action = policy.act(obs)
-            obs, reward, done, _ = env.step(action)
+    while True:
+        action = policy.act(obs)
+        obs, reward, done, _ = env.step(action)
+        rewards.append(reward)
+        actions.append(action)
+        if done and sim_exam:
+            # Simulate exam
+            obs, reward, done, _ = env.step(None)
             rewards.append(reward)
-            actions.append(action)
-            if done:
-                # Simulate exam
-                obs, reward, done, _ = env.step(None)
-                rewards.append(reward)
-                break
-
-            pb.update()
+            break
 
     final_n_learned = reward * env.n_item
     n_view = len(np.unique(np.asarray(actions)))
