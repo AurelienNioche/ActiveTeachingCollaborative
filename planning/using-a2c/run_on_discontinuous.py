@@ -97,7 +97,7 @@ def run_continuous_teaching(reward_type):
 if __name__ == "__main__":
     # for rc in [1, 1.5, 2, 3, 4]:
     #     print('Running on {}...'.format(rc))
-    for i in [1, 2, 5, 10, 20]:
+    for i in [4, 8, 12, 20, 30]:
         print('Running on {}...'.format(i))
         forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
         repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
@@ -105,8 +105,8 @@ if __name__ == "__main__":
         forgets = np.reshape(forgets, newshape=(n_users, n_items))
         repetitions = np.array(repetitions)[0]
         repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
-        model.save('discontinuous_runs/avoid_forget_{}'.format(i))
+        model = run_discontinuous_teaching(types['monotonic'], forgets, repetitions, i)
+        model.save('discontinuous_runs/monotonic_{}'.format(i))
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
     # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
