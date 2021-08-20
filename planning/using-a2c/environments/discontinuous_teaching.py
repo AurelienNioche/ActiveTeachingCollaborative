@@ -78,7 +78,7 @@ class DiscontinuousTeaching(gym.Env):
         return self.current_user
 
     def reset(self, user=None):
-        if not user:
+        if user is None:
             user = self.pick_a_user()
         self.current_user = user
         self.state = np.zeros((self.n_item, 2))

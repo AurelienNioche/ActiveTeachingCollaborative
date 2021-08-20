@@ -2,7 +2,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-def run_one_episode(env, policy, user=None, sim_exam=True):
+def run_one_episode(env, policy, user=None, simulate_exam=True):
     rewards = []
     actions = []
 
@@ -13,10 +13,13 @@ def run_one_episode(env, policy, user=None, sim_exam=True):
         obs, reward, done, _ = env.step(action)
         rewards.append(reward)
         actions.append(action)
-        if done and sim_exam:
+        if done and simulate_exam:
             # Simulate exam
             obs, reward, done, _ = env.step(None)
             rewards.append(reward)
+            break
+        elif done and not simulate_exam:
+            obs = env.reset(user)
             break
 
     final_n_learned = reward * env.n_item
