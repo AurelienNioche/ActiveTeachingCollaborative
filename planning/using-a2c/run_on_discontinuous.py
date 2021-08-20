@@ -17,7 +17,7 @@ from human_agents import generate_agents
 
 sns.set()
 n_users = 5
-n_items = 30
+n_items = 60
 
 
 def produce_rates():
@@ -96,16 +96,16 @@ def run_continuous_teaching(reward_type, t_max):
 if __name__ == "__main__":
     # for rc in [1, 1.5, 2, 3, 4]:
     #     print('Running on {}...'.format(rc))
-    for i in [10, 20, 30, 50]:
+    for i in [3, 10, 20, 30, 50]:
         print('Running on {}...'.format(i))
-        # forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
-        # repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
-        # forgets = np.array(forgets)[0]
-        # forgets = np.reshape(forgets, newshape=(n_users, n_items))
-        # repetitions = np.array(repetitions)[0]
-        # repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        # model = run_discontinuous_teaching(types['monotonic'], forgets, repetitions, i)
-        model = run_continuous_teaching(types['exam_based'], i)
+        forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
+        repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
+        forgets = np.array(forgets)[0]
+        forgets = np.reshape(forgets, newshape=(n_users, n_items))
+        repetitions = np.array(repetitions)[0]
+        repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
+        model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
+        # model = run_continuous_teaching(types['exam_based'], i)
         model.save('continuous_runs/exam_based_{}'.format(i))
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')

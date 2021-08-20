@@ -140,7 +140,7 @@ class DiscontinuousTeaching(gym.Env):
             reward = n_learned_now / self.n_item
             if session_progression == 0:
                 learned_diff = n_learned_now - np.count_nonzero(self.learned_before)
-                reward += learned_diff * self.gamma
+                reward += min(learned_diff, 0) * self.gamma
 
         reward *= self.reward_coeff
 
