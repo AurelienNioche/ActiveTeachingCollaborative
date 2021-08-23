@@ -44,7 +44,8 @@ def run_discontinuous_teaching(reward_type, forgets, repetitions, gamma):
         n_item=n_items,
         penalty_coeff=0.2,
         reward_type=reward_type,
-        gamma=gamma
+        gamma=gamma,
+        reward_coeff=1. / gamma / 5
     )
     # layers_dim = [64, 64, 128]
     m = A2C(env,
@@ -96,7 +97,7 @@ def run_continuous_teaching(reward_type, t_max):
 if __name__ == "__main__":
     # for rc in [1, 1.5, 2, 3, 4]:
     #     print('Running on {}...'.format(rc))
-    for i in [3, 10, 20, 30, 50]:
+    for i in [1, 3, 10, 20, 30, 50]:
         print('Running on {}...'.format(i))
         forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
         repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
@@ -106,7 +107,7 @@ if __name__ == "__main__":
         repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
         model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
         # model = run_continuous_teaching(types['exam_based'], i)
-        model.save('continuous_runs/exam_based_{}'.format(i))
+        model.save('discontinuous_runs/avoid_forget_{}'.format(i))
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
     # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
