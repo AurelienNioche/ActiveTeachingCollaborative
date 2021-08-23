@@ -83,7 +83,8 @@ def run_continuous_teaching(reward_type, t_max):
 
     m = A2C(env)
 
-    iterations = env.t_max * 1e5
+    # iterations = env.t_max * 5e5
+    iterations = 2e6
     check_freq = env.t_max
 
     with ProgressBarCallback(env, check_freq) as callback:
@@ -97,17 +98,17 @@ def run_continuous_teaching(reward_type, t_max):
 if __name__ == "__main__":
     # for rc in [1, 1.5, 2, 3, 4]:
     #     print('Running on {}...'.format(rc))
-    for i in [1, 3, 10, 20, 30, 50]:
+    for i in [10, 20, 30, 50]:
         print('Running on {}...'.format(i))
-        forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
-        repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
-        forgets = np.array(forgets)[0]
-        forgets = np.reshape(forgets, newshape=(n_users, n_items))
-        repetitions = np.array(repetitions)[0]
-        repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
-        # model = run_continuous_teaching(types['exam_based'], i)
-        model.save('discontinuous_runs/avoid_forget_{}'.format(i))
+        # forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
+        # repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
+        # forgets = np.array(forgets)[0]
+        # forgets = np.reshape(forgets, newshape=(n_users, n_items))
+        # repetitions = np.array(repetitions)[0]
+        # repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
+        # model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
+        model = run_continuous_teaching(types['exam_based'], i)
+        model.save('continuous_runs/sparse_reward_{}'.format(i))
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
     # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
