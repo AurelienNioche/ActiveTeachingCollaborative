@@ -18,7 +18,6 @@ class ContinuousTeaching(gym.Env, ABC):
             n_item=30,
             t_max=1000,
             time_per_iter=1,
-            n_coeffs: int = 1,
             penalty_coeff: float = 0.2,
             reward_coeff: float = 1,
             reward_type=types['monotonic']
@@ -33,9 +32,10 @@ class ContinuousTeaching(gym.Env, ABC):
         self.tau = tau
         self.log_tau = np.log(self.tau)
 
-        if delta_coeffs.shape[0] != n_coeffs:
+        n_coeffs = delta_coeffs.shape[0]
+        if n_coeffs < 1:
             raise ValueError(
-                "Mismatch between delta_coeffs shape and n_coeffs"
+                "The length of delta_coeffs should be superior or equal to 1"
             )
         self.delta_coeffs = delta_coeffs
 
