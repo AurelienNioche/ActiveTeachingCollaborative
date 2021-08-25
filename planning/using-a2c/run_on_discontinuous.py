@@ -74,7 +74,6 @@ def run_continuous_teaching(reward_type, t_max):
         n_item=n_items,
         tau=0.9,
         delta_coeffs=np.array([3, 20]),
-        n_coeffs=2,
         penalty_coeff=0.2,
         reward_type=reward_type
     )
@@ -82,7 +81,7 @@ def run_continuous_teaching(reward_type, t_max):
     m = A2C(env)
 
     # iterations = env.t_max * 5e5
-    iterations = 5e6
+    iterations = 10e6
     check_freq = env.t_max
 
     with ProgressBarCallback(env, check_freq) as callback:
