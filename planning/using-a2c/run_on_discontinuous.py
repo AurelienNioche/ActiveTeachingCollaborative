@@ -43,12 +43,14 @@ def run_discontinuous_teaching(reward_type, forgets, repetitions, gamma):
         delta_coeffs=np.array([3, 20]),
         n_item=n_items,
         penalty_coeff=0.2,
-        reward_type=reward_type
+        reward_type=reward_type,
+        gamma=gamma
     )
     # layers_dim = [64, 64, 128]
     m = A2C(env,
+            normalize_advantage=True,
             # net_arch=[{'pi': layers_dim, 'vf': layers_dim}],
-            # seed=123
+            seed=123
         )
 
     env_t_max = env.n_session * env.n_iter_per_session
@@ -95,17 +97,17 @@ def run_continuous_teaching(reward_type, t_max):
 if __name__ == "__main__":
     # for rc in [1, 1.5, 2, 3, 4]:
     #     print('Running on {}...'.format(rc))
-    for i in [100, 200]:
+    for i in [1, 3, 10, 20, 30]:
         print('Running on {}...'.format(i))
-        # forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
-        # repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
-        # forgets = np.array(forgets)[0]
-        # forgets = np.reshape(forgets, newshape=(n_users, n_items))
-        # repetitions = np.array(repetitions)[0]
-        # repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        # model = run_discontinuous_teaching(types['mean_learned'], forgets, repetitions, i)
-        model = run_continuous_teaching(types['exam_based'], i)
-        model.save('continuous_runs/sparse_reward_{}'.format(i))
+        forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
+        repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
+        forgets = np.array(forgets)[0]
+        forgets = np.reshape(forgets, newshape=(n_users, n_items))
+        repetitions = np.array(repetitions)[0]
+        repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
+        model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
+        # model = run_continuous_teaching(types['exam_based'], i)
+        model.save('continuous_runs/av26_norma_{}'.format(i))
 
     # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
     # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
