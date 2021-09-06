@@ -20,7 +20,8 @@ class ContinuousTeaching(gym.Env, ABC):
             time_per_iter=1,
             penalty_coeff: float = 0.2,
             reward_coeff: float = 1,
-            reward_type=types['monotonic']
+            reward_type=types['monotonic'],
+            gamma=1
     ):
         super().__init__()
 
@@ -63,6 +64,8 @@ class ContinuousTeaching(gym.Env, ABC):
         self.reward_coeff = reward_coeff
         self.reward_type = reward_type
 
+        self.gamma = gamma
+
     def pick_a_user(self):
         self.current_user = random.randint(0, self.n_users - 1)
         return self.current_user
@@ -97,7 +100,7 @@ class ContinuousTeaching(gym.Env, ABC):
                      + self.penalty_coeff * penalizing_factor
 
         elif self.reward_type == types['exam_based']:
-            if self.t == self.t_max - 1:
+            if self.t % ((self.t_max - 1) // self.gamma) == 0:
                 reward = n_learned_now / self.n_item
             else:
                 reward = 0

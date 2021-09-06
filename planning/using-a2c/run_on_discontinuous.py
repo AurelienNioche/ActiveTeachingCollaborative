@@ -65,19 +65,22 @@ def run_discontinuous_teaching(reward_type, forgets, repetitions, gamma):
     return m
 
 
-def run_continuous_teaching(reward_type, t_max):
+def run_continuous_teaching(reward_type, forget_rates=None, repetition_rates=None, gamma=1):
     global n_items
 
-    forget_rates, repetition_rates = produce_rates()
+    if forget_rates is None:
+        forget_rates, repetition_rates = produce_rates()
+
     env = ContinuousTeaching(
-        t_max=t_max,
+        t_max=100,
         initial_forget_rates=forget_rates,
         initial_repetition_rates=repetition_rates,
         n_item=n_items,
         tau=0.9,
         delta_coeffs=np.array([3, 20]),
         penalty_coeff=0.2,
-        reward_type=reward_type
+        reward_type=reward_type,
+        gamma=gamma
     )
 
     m = A2C(env)
@@ -90,6 +93,7 @@ def run_continuous_teaching(reward_type, t_max):
         m.learn(iterations, callback=callback)
 
     plt.plot([np.mean(r) for r in callback.hist_rewards])
+    plt.savefig('{}.png'.format(gamma))
     plt.show()
     return m
 
@@ -97,7 +101,7 @@ def run_continuous_teaching(reward_type, t_max):
 if __name__ == "__main__":
     # for rc in [1, 1.5, 2, 3, 4]:
     #     print('Running on {}...'.format(rc))
-    for i in [1, 3, 10, 20, 30]:
+    for i in [1, 2, 3, 4, 5]:
         print('Running on {}...'.format(i))
         forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
         repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
@@ -105,17 +109,6 @@ if __name__ == "__main__":
         forgets = np.reshape(forgets, newshape=(n_users, n_items))
         repetitions = np.array(repetitions)[0]
         repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
-        # model = run_continuous_teaching(types['exam_based'], i)
-        model.save('continuous_runs/av26_norma_{}'.format(i))
-
-    # model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(rc), sep=',', format='%s')
-    # model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(rc), sep=',', format='%s')
-
-    # for r, i in types.items():
-    #     if i > 2:
-    #         print('Running on {}...'.format(r))
-    #         model = run_discontinuous_teaching(types[r])
-    #         model.env.all_forget_rates.tofile('discontinuous_runs/forget_{}'.format(r), sep=',', format='%s')
-    #         model.env.all_repetition_rates.tofile('discontinuous_runs/repetition_{}'.format(r), sep=',', format='%s')
-    #         model.save('discontinuous_runs/run_{}'.format(r))
+        # model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
+        model = run_continuous_teaching(types['exam_based'], forgets, repetitions, i)
+        model.save('continuous_runs/eb7_bootstrapped_{}'.format(i))
