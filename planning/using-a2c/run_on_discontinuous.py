@@ -19,6 +19,8 @@ sns.set()
 n_users = 5
 n_items = 60
 
+LOAD_RATES = True
+
 
 def produce_rates():
     global n_items, n_users
@@ -28,8 +30,8 @@ def produce_rates():
     return forget_rates, repetition_rates
 
 
-def run_discontinuous_teaching(reward_type, forgets, repetitions, gamma):
-    global n_items
+def run_discontinuous_teaching(reward_type, gamma):
+    global n_items, forgets, repetitions
 
     # forget_rates, repetition_rates = produce_rates()
     env = DiscontinuousTeaching(
@@ -65,10 +67,13 @@ def run_discontinuous_teaching(reward_type, forgets, repetitions, gamma):
     return m
 
 
-def run_continuous_teaching(reward_type, forget_rates=None, repetition_rates=None, gamma=1):
-    global n_items
+def run_continuous_teaching(reward_type, gamma=1):
+    global n_items, forgets, repetitions
 
-    if forget_rates is None:
+    if LOAD_RATES:
+        forget_rates = forgets
+        repetition_rates = repetitions
+    else:
         forget_rates, repetition_rates = produce_rates()
 
     env = ContinuousTeaching(
@@ -98,17 +103,53 @@ def run_continuous_teaching(reward_type, forget_rates=None, repetition_rates=Non
     return m
 
 
+def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
+    global forgets, repetitions, LOAD_RATES
+
+    if LOAD_RATES:
+        env = ContinuousTeaching(
+            t_max=100,
+            initial_forget_rates=forgets,
+            initial_repetition_rates=repetitions,
+            n_item=n_items,
+            tau=0.9,
+            delta_coeffs=np.array([3, 20]),
+            penalty_coeff=0.2,
+            reward_type=reward_type,
+            gamma=gamma
+        )
+        m = A2C(env)
+        iterations = 10e6 / len(session_lengths)
+        check_freq = env.t_max
+        for i in range(len(session_lengths)):
+            env.t_max = session_lengths[i]
+            if i > 0:
+                gamma *= session_lengths[i] / session_lengths[i - 1]
+            env.gamma = gamma
+            with ProgressBarCallback(env, check_freq) as callback:
+                m.learn(iterations, callback=callback)
+
+        plt.plot([np.mean(r) for r in callback.hist_rewards])
+        plt.savefig('curriculum_plots/{}.png'.format(gamma))
+        plt.clf()
+
+    else:
+        # TODO produce rates
+        pass
+    return m
+
+
 if __name__ == "__main__":
-    # for rc in [1, 1.5, 2, 3, 4]:
-    #     print('Running on {}...'.format(rc))
     for i in [1, 2, 3, 4, 5]:
         print('Running on {}...'.format(i))
-        forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
-        repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
-        forgets = np.array(forgets)[0]
-        forgets = np.reshape(forgets, newshape=(n_users, n_items))
-        repetitions = np.array(repetitions)[0]
-        repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
-        # model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
-        model = run_continuous_teaching(types['exam_based'], forgets, repetitions, i)
-        model.save('continuous_runs/eb7_bootstrapped_{}'.format(i))
+        if LOAD_RATES:
+            forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
+            repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
+            forgets = np.array(forgets)[0]
+            forgets = np.reshape(forgets, newshape=(n_users, n_items))
+            repetitions = np.array(repetitions)[0]
+            repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
+    # model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
+        model = curriculum_learning(types['exam_based'], i)
+    # model = run_continuous_teaching(types['exam_based'], i)
+        model.save('curriculum_runs/eb16_{}'.format(i))
