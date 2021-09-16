@@ -140,7 +140,7 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
 
 
 if __name__ == "__main__":
-    for i in [1, 2, 3, 4, 5]:
+    for i in [2, 3, 4, 5]:
         print('Running on {}...'.format(i))
         if LOAD_RATES:
             forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
