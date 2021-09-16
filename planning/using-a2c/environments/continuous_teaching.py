@@ -44,7 +44,7 @@ class ContinuousTeaching(gym.Env, ABC):
         # repetition rates and one for learned ones
         self.obs = np.zeros((n_item, self.obs_dim))
         self.observation_space = gym.spaces.Box(low=0.0, high=np.inf,
-                                                shape=(n_item * self.obs_dim, ))
+                                                shape=(n_item * self.obs_dim + 1, ))
         self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
         self.penalty_coeff = penalty_coeff
@@ -82,7 +82,12 @@ class ContinuousTeaching(gym.Env, ABC):
         self.obs[:, 3] = self.initial_forget_rates
         self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
-        return self.obs.flatten()
+        # return self.obs.flatten()
+        return self.format_obs(0)
+
+    def format_obs(self, session_progression):
+        return np.hstack(
+            (self.obs.flatten(), np.array([session_progression, ])))
 
     def compute_reward(self, logp_recall):
 
@@ -100,7 +105,7 @@ class ContinuousTeaching(gym.Env, ABC):
                      + self.penalty_coeff * penalizing_factor
 
         elif self.reward_type == types['exam_based']:
-            if self.t % ((self.t_max - 1) // self.gamma) == 0:
+            if self.t > 0 and (self.t % (self.t_max // self.gamma) == 0 or self.t == self.t_max - 1):
                 reward = n_learned_now / self.n_item
             else:
                 reward = 0
@@ -140,7 +145,7 @@ class ContinuousTeaching(gym.Env, ABC):
 
         info = {}
         self.t += 1
-        return self.obs.flatten(), reward, done, info
+        return self.format_obs(self.t), reward, done, info
 
     @classmethod
     def get_p_recall(cls, obs):
