@@ -130,7 +130,7 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
                 m.learn(iterations, callback=callback)
 
         plt.plot([np.mean(r) for r in callback.hist_rewards])
-        plt.savefig('curriculum_plots/{}.png'.format(gamma))
+        plt.savefig('curriculum_plots/100_{}.png'.format(gamma))
         plt.clf()
 
     else:
@@ -150,6 +150,6 @@ if __name__ == "__main__":
             repetitions = np.array(repetitions)[0]
             repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
     # model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
-        model = curriculum_learning(types['exam_based'], i, session_lengths=(50, ))
+        model = curriculum_learning(types['exam_based'], i, session_lengths=(100, ))
     # model = run_continuous_teaching(types['exam_based'], i)
-        model.save('curriculum_runs/eb17_50_{}'.format(i))
+        model.save('curriculum_runs/eb17_100_{}'.format(i))
