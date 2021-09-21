@@ -20,7 +20,7 @@ n_users = 5
 n_items = 60
 
 LOAD_RATES = True
-COMMIT_NAME = '20_50'
+COMMIT_NAME = '20_50_100'
 
 
 def produce_rates():
@@ -153,6 +153,6 @@ if __name__ == "__main__":
             repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
             repetitions = repetitions[:, :n_items // 2]
     # model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
-        model = curriculum_learning(types['exam_based'], i, session_lengths=(20, 50))
+        model = curriculum_learning(types['exam_based'], i, session_lengths=(20, 50, 100))
     # model = run_continuous_teaching(types['exam_based'], i)
         model.save('curriculum_runs/eb21_{}_{}'.format(COMMIT_NAME, i))
