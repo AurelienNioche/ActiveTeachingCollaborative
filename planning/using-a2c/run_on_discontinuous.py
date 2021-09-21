@@ -111,7 +111,7 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
             t_max=100,
             initial_forget_rates=forgets,
             initial_repetition_rates=repetitions,
-            n_item=n_items,
+            n_item=30,
             tau=0.9,
             delta_coeffs=np.array([3, 20]),
             penalty_coeff=0.2,
@@ -130,7 +130,7 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
                 m.learn(iterations, callback=callback)
 
         plt.plot([np.mean(r) for r in callback.hist_rewards])
-        plt.savefig('curriculum_plots/100_{}.png'.format(gamma))
+        plt.savefig('curriculum_plots/eb21{}.png'.format(gamma))
         plt.clf()
 
     else:
@@ -140,16 +140,18 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
 
 
 if __name__ == "__main__":
-    for i in [2, 3, 4, 5]:
+    for i in [2, 3, 4, 5, 8]:
         print('Running on {}...'.format(i))
         if LOAD_RATES:
             forgets = pd.read_csv('data/forget_2', delimiter=',', header=None)
             repetitions = pd.read_csv('data/repetition_2', delimiter=',', header=None)
             forgets = np.array(forgets)[0]
             forgets = np.reshape(forgets, newshape=(n_users, n_items))
+            forgets = forgets[:, :n_items // 2]
             repetitions = np.array(repetitions)[0]
             repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
+            repetitions = repetitions[:, :n_items // 2]
     # model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
-        model = curriculum_learning(types['exam_based'], i, session_lengths=(100, ))
+        model = curriculum_learning(types['exam_based'], i, session_lengths=(20, 50, 100))
     # model = run_continuous_teaching(types['exam_based'], i)
-        model.save('curriculum_runs/eb17_100_{}'.format(i))
+        model.save('curriculum_runs/eb21{}'.format(i))
