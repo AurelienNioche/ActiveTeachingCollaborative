@@ -3,37 +3,26 @@ import numpy as np
 import torch
 
 
-def get_experimental_data(path="../../data/data_character_meaning.csv"):
+def get_experimental_data(path="data/data.csv"):
 
-    df = pd.read_csv(path, index_col=0,
-                     dtype={"success": "boolean"},
-                     parse_dates=['ts_display', 'ts_reply'])
+    df = pd.read_csv(path)
 
-    # Keep only users from the last experiment and that did it until the end (6 + 1  sessions for each teacher)
-    df.drop(df[(df.domain != "active.fi") | (df.n_session_done != 14)].index,
-            inplace=True)
-
-    # Convert timestamps into seconds
-    beginning_history = pd.Timestamp("1970-01-01", tz="UTC")
-    df["timestamp"] = (
-                df["ts_reply"] - beginning_history).dt.total_seconds().values
-
-    # Copy actual item ID in a new column
-    df["item_id"] = df.item
-    # Create new ids starting from zero
-    for i, i_id in enumerate(df.item_id.unique()):
-        df.loc[df.item_id == i_id, 'item'] = i
+    # Create item ids starting from zero
+    df["item"] = pd.factorize(df.character)[0]
 
     # Total number of user
     n_u = len(df.user.unique())
 
-    # Number of observations per user
-    n_o_by_u = np.zeros(shape=n_u, dtype=int)
-    for u, (user, user_df) in enumerate(df.groupby("user")):
-        # Do not count first presentation
-        n_o_by_u[u] = len(user_df) - len(user_df.item.unique())
+    # Number of items seen by each user
+    n_item_by_u = df.groupby(["user"])["character"].nunique().values
 
-        # Total number of observation
+    # Number of observations per user
+    n_o_by_u = df.user.value_counts()
+
+    # Do not count first presentation
+    n_o_by_u -= n_item_by_u
+
+    # Total number of observation
     n_obs = n_o_by_u.sum()
 
     # Replies (1: success, 0: error)
@@ -52,10 +41,10 @@ def get_experimental_data(path="../../data/data_character_meaning.csv"):
     for i_u, (user, user_df) in enumerate(df.groupby("user")):
 
         # Extract data from user `u`
-        user_df = user_df.sort_values(by="timestamp")
+        user_df = user_df.sort_values(by="ts_reply")
         seen = user_df.item.unique()
         w_u = user_df.item.values
-        ts_u = user_df.timestamp.values
+        ts_u = user_df.ts_reply.values
         y_u = user_df.success.values
 
         # Initialize counts of repetition for each words at -1
