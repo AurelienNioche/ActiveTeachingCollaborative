@@ -21,6 +21,7 @@ n_items = 60
 
 LOAD_RATES = True
 COMMIT_NAME = '20_50_100'
+EXPERIMENT_NAME = ''
 
 
 def produce_rates():
@@ -131,7 +132,7 @@ def curriculum_learning(reward_type, gamma, session_lengths=(50, 100)):
                 m.learn(iterations, callback=callback)
 
         plt.plot([np.mean(r) for r in callback.hist_rewards])
-        plt.savefig('curriculum_plots/eb21_{}_{}.png'.format(COMMIT_NAME, gamma))
+        plt.savefig('curriculum_plots/{}_{}_{}.png'.format(EXPERIMENT_NAME, COMMIT_NAME, gamma))
         plt.clf()
 
     else:
@@ -152,7 +153,6 @@ if __name__ == "__main__":
             repetitions = np.array(repetitions)[0]
             repetitions = np.reshape(repetitions, newshape=(n_users, n_items))
             repetitions = repetitions[:, :n_items // 2]
-    # model = run_discontinuous_teaching(types['avoid_forget'], forgets, repetitions, i)
+
         model = curriculum_learning(types['exam_based'], i, session_lengths=(20, 50, 100))
-    # model = run_continuous_teaching(types['exam_based'], i)
         model.save('curriculum_runs/eb21_{}_{}'.format(COMMIT_NAME, i))

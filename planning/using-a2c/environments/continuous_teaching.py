@@ -63,7 +63,6 @@ class ContinuousTeaching(gym.Env, ABC):
         # self.reward_range = (- reward_coeff, reward_coeff)
         self.reward_coeff = reward_coeff
         self.reward_type = reward_type
-
         self.gamma = gamma
 
     def pick_a_user(self):
@@ -82,7 +81,6 @@ class ContinuousTeaching(gym.Env, ABC):
         self.obs[:, 3] = self.initial_forget_rates
         self.learned_before = np.zeros((self.n_item, ))
         self.t = 0
-        # return self.obs.flatten()
         return self.format_obs(0)
 
     def format_obs(self, session_progression):
