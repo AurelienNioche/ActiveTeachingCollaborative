@@ -149,8 +149,8 @@ model2
 *.hpp
 
 */checkpoints
-/inference/norm-flow/minibatch/fig/
-/inference/norm-flow/minibatch/artificial_mini_batch_loss.pdf
-/inference/norm-flow/minibatch/runs/
 
-/inference/norm-flow/minibatch/lightning_logs/
+fig/
+
+runs/
+lightning_logs/
