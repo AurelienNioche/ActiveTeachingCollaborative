@@ -70,6 +70,7 @@ def train_minibatch(
                                  theta_flow=theta_flow,
                                  n_sample=n_sample,
                                  n_u=n_u, n_w=n_w,
+                                 total_n_obs=n_obs,
                                  **d)
                 loss.backward()
                 optimizer.step()

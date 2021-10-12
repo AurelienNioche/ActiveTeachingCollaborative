@@ -5,7 +5,8 @@ from torch import distributions as dist
 
 class LossMinibatch:
     @staticmethod
-    def __call__(z_flow, theta_flow, n_sample, n_u, n_w,
+    def __call__(z_flow, theta_flow, n_sample,
+                 n_u, n_w, total_n_obs,
                  u, w, x, r, y):
         # Get unique users for this (mini)batch
         uniq_u = np.unique(u)
@@ -57,8 +58,11 @@ class LossMinibatch:
         ll_Zw2 = dist.Normal(mu2, torch.exp(0.5 * log_var_w2)).log_prob(
             Zw2[uniq_w]).sum(axis=0)
 
+        # Compute scale for log-likelihood
+        batch_size = y.size(0)
+        scale = total_n_obs / batch_size
+
         # Add all the loss terms and compute average (= expectation estimate)
-        to_min = (ln_q0_Z + ln_q0_θ
-                  - sum_ld_Z - sum_ld_θ
-                  - ll - ll_Zu1 - ll_Zu2 - ll_Zw1 - ll_Zw2).mean()
+        to_min = (ln_q0_Z + ln_q0_θ - sum_ld_Z - sum_ld_θ
+                  - scale*(ll + ll_Zu1 + ll_Zu2 + ll_Zw1 + ll_Zw2)).mean()
         return to_min
