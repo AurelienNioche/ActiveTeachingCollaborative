@@ -1,10 +1,11 @@
 import numpy as np
+import pandas as pd
 from scipy.special import expit
 import torch
 
 
 def simulate(
-        seed=0,
+        seed,
         sg_u=(0.5, 0.2),
         sg_w=(1.0, 0.4),
         mu=(-4., -2.),

@@ -1,15 +1,9 @@
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-FIG_DIR = "fig"
-os.makedirs(FIG_DIR, exist_ok=True)
 
-
-def plot_posterior(theta_flow, batch_size=1000, truth=None,
-                   name=""):
+def plot_posterior(path, theta_flow, batch_size=1000, truth=None):
 
     theta_flow.eval()
     with torch.no_grad():
@@ -87,6 +81,6 @@ def plot_posterior(theta_flow, batch_size=1000, truth=None,
         ax.legend()
 
         fig.tight_layout()
-        plt.savefig(os.path.join(FIG_DIR, f"{name}_posterior.pdf"))
+        plt.savefig(path)
 
     theta_flow.train()

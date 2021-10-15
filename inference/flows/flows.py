@@ -2,6 +2,8 @@ import os
 import torch
 import torch.distributions as dist
 from torch import nn
+from typing import Any, Dict
+
 from . flow_types.plannar import PlanarFlow
 from . flow_types.radial import RadialFlow
 
@@ -10,7 +12,7 @@ def safe_log(z):
     return torch.log(z + 1e-7)
 
 
-class NormalizingFlow(nn.Module):
+class NormalizingFlows(nn.Module):
     """
     Adapted from https://github.com/ex4sperans/variational-inference-with-normalizing-flows
 
@@ -62,24 +64,6 @@ class NormalizingFlow(nn.Module):
 
         return x, log_prob_base_dist, log_det
 
-    def save(self, name):
-
-        path = os.path.join(self.BKP_DIR, name)
-        os.makedirs(self.BKP_DIR, exist_ok=True)
-        torch.save(self.state_dict(),
-                   path+"_state_dict.p")
-        torch.save(dict(dim=self.dim,
-                        flow_length=self.flow_length,
-                        flow_type=self.flow_model.__name__),
-                   path+"_attr.p")
-
-    @classmethod
-    def load(cls, name):
-        path = os.path.join(cls.BKP_DIR, name)
-        model = cls(**torch.load(path+"_attr.p"))
-        model.load_state_dict(torch.load(path+"_state_dict.p"))
-        return model
-
     def inverse(self, z):
         m, _ = z.shape
         log_det = torch.zeros(m)
@@ -93,3 +77,29 @@ class NormalizingFlow(nn.Module):
         z = self.sample_base_dist(n_samples)
         x, _ = self.inverse(z)
         return x
+
+    def _get_constructor_parameters(self) -> Dict[str, Any]:
+
+        return dict(dim=self.dim,
+                    flow_length=self.flow_length,
+                    flow_model=self.flow_model)
+
+    def save(self, path: str) -> None:
+        """
+        Save model to a given location.
+        """
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save({"state_dict": self.state_dict(),
+                    "data": self._get_constructor_parameters()}, path)
+
+    @classmethod
+    def load(cls, path: str):
+        """
+        Load model from path.
+        """
+        saved_variables = torch.load(path)
+        # Create policy object
+        model = cls(**saved_variables["data"])
+        # Load weights
+        model.load_state_dict(saved_variables["state_dict"])
+        return model

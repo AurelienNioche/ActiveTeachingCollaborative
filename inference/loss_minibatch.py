@@ -5,7 +5,7 @@ from torch import distributions as dist
 
 class LossMinibatch:
     @staticmethod
-    def __call__(z_flow, theta_flow, n_sample, n_u, n_w,
+    def __call__(z_flow, theta_flow, n_sample, total_n_obs, n_u, n_w,
                  u, w, x, r, y):
         # Get unique users for this (mini)batch
         uniq_u = np.unique(u)
@@ -28,8 +28,8 @@ class LossMinibatch:
         Zw2 = zk_Z[:, n_w + n_u * 2:].T
 
         # Get θ-values for both parameters
-        mu1, log_var_u1, log_var_w1 = zk_θ[:, :3].T
-        mu2, log_var_u2, log_var_w2 = zk_θ[:, 3:].T
+        half_mu1, log_var_u1, log_var_w1 = zk_θ[:, :3].T
+        half_mu2, log_var_u2, log_var_w2 = zk_θ[:, 3:].T
 
         # Compute Z-values for both parameters
         Z1 = Zu1[u] + Zw1[w]
@@ -46,19 +46,22 @@ class LossMinibatch:
         ll = dist.Bernoulli(probs=torch.exp(log_p)).log_prob(y).sum(axis=0)
 
         # Comp. likelihood Z-values given population parameterization for first parameter
-        ll_Zu1 = dist.Normal(mu1, torch.exp(0.5 * log_var_u1)).log_prob(
+        ll_Zu1 = dist.Normal(half_mu1, torch.exp(0.5 * log_var_u1)).log_prob(
             Zu1[uniq_u]).sum(axis=0)
-        ll_Zw1 = dist.Normal(mu1, torch.exp(0.5 * log_var_w1)).log_prob(
+        ll_Zw1 = dist.Normal(half_mu1, torch.exp(0.5 * log_var_w1)).log_prob(
             Zw1[uniq_w]).sum(axis=0)
 
         # Comp. likelihood Z-values given population parameterization for second parameter
-        ll_Zu2 = dist.Normal(mu2, torch.exp(0.5 * log_var_u2)).log_prob(
+        ll_Zu2 = dist.Normal(half_mu2, torch.exp(0.5 * log_var_u2)).log_prob(
             Zu2[uniq_u]).sum(axis=0)
-        ll_Zw2 = dist.Normal(mu2, torch.exp(0.5 * log_var_w2)).log_prob(
+        ll_Zw2 = dist.Normal(half_mu2, torch.exp(0.5 * log_var_w2)).log_prob(
             Zw2[uniq_w]).sum(axis=0)
 
         # Add all the loss terms and compute average (= expectation estimate)
-        to_min = (ln_q0_Z + ln_q0_θ
-                  - sum_ld_Z - sum_ld_θ
-                  - ll - ll_Zu1 - ll_Zu2 - ll_Zw1 - ll_Zw2).mean()
-        return to_min
+        ln_q0 = ln_q0_θ + ln_q0_Z  # log q0
+        sum_ln_det = sum_ld_θ + sum_ld_Z  # sum log determinant
+        lls = ll + ll_Zu1 + ll_Zu2 + ll_Zw1 + ll_Zw2
+
+        scale = total_n_obs / x.size(0)
+        loss = (ln_q0 - sum_ln_det - scale*lls).mean()
+        return loss

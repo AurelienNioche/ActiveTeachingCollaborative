@@ -7,7 +7,7 @@ FIG_DIR = "fig"
 os.makedirs(FIG_DIR, exist_ok=True)
 
 
-def plot_loss(hist_loss, zoom_start=1000, name=""):
+def plot_loss(path, hist_loss, zoom_start=1000):
     fig, axes = plt.subplots(ncols=2, figsize=(10, 5))
     ax = axes[0]
     ax.plot(hist_loss)
@@ -20,4 +20,4 @@ def plot_loss(hist_loss, zoom_start=1000, name=""):
     ax.set_ylabel("loss")
 
     fig.tight_layout()
-    plt.savefig(os.path.join(FIG_DIR, f"{name}_loss.pdf"))
+    plt.savefig(path)
