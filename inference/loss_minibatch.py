@@ -63,5 +63,5 @@ class LossMinibatch:
         lls = ll + ll_Zu1 + ll_Zu2 + ll_Zw1 + ll_Zw2
 
         scale = total_n_obs / x.size(0)
-        loss = (ln_q0 - sum_ln_det - scale*lls).mean()
+        loss = (ln_q0 - sum_ln_det - scale*lls).sum() / (n_sample * total_n_obs)
         return loss

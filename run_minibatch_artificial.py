@@ -60,6 +60,7 @@ def run_inference(bkp_name="norm_flows",
             print("Didn't find backup. Run the inference process instead...")
 
     data, truth = simulate(use_torch=True, seed=SEED_DATA_GENERATION)
+    # print(len(data["x"]))  # 40000
 
     z_flow, theta_flow, hist_loss = train_minibatch(
         data=data,
@@ -82,7 +83,9 @@ def run_inference(bkp_name="norm_flows",
 
 def main():
 
-    z_flow, theta_flow, hist_loss, truth = run_inference()
+    z_flow, theta_flow, hist_loss, truth = run_inference(load_bkp=False,
+                                                         batch_size=500)
+
     make_fig(theta_flow=theta_flow, hist_loss=hist_loss, truth=truth)
 
 

@@ -77,7 +77,14 @@ class LossTeaching:
             Zw2).sum(axis=0)
 
         # Add all the loss terms and compute average (= expectation estimate)
-        to_min = (ln_q0_Z + ln_q0_θ
-                  - sum_ld_Z - sum_ld_θ
-                  - ll - ll_Zu1 - ll_Zu2 - ll_Zw1 - ll_Zw2).mean()
-        return to_min
+        # to_min = (ln_q0_Z + ln_q0_θ
+        #           - sum_ld_Z - sum_ld_θ
+        #           - ll - ll_Zu1 - ll_Zu2 - ll_Zw1 - ll_Zw2).mean()
+        ln_q0 = ln_q0_θ + ln_q0_Z  # log q0
+        sum_ln_det = sum_ld_θ + sum_ld_Z  # sum log determinant
+        lls = ll + ll_Zu1 + ll_Zu2 + ll_Zw1 + ll_Zw2
+
+        # scale = total_n_obs / x.size(0)
+        total_n_obs = len(x)
+        loss = (ln_q0 - sum_ln_det - lls).sum() / (n_sample * total_n_obs)
+        return loss
