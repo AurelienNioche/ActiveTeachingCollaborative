@@ -18,6 +18,7 @@ sns.set()
 def plot_results(mu_samples, log_var_samples, 
                  obs_mu, obs_sigma, 
                  true_mu, true_sigma,
+                 losses,
                  alpha_scatter=0.3, 
                  alpha_pdf=0.1):
     
@@ -26,7 +27,7 @@ def plot_results(mu_samples, log_var_samples,
     
     sigma_samples = torch.exp(0.5*log_var_samples)
     
-    fig, axes = plt.subplots(ncols=2, figsize=(16, 8))
+    fig, axes = plt.subplots(ncols=3, figsize=(20, 8))
 
     ax = axes[0]
     ax.set_title("Unconstrained space")
@@ -56,25 +57,39 @@ def plot_results(mu_samples, log_var_samples,
     ax.legend(handles, labels,)
     ax.set_xlim(torch.min(x), torch.max(x))
 
+    ax = axes[2]
+    ax.plot(losses)
+    ax.set_xlabel("epoch")
+    ax.set_ylabel("loss")
+
     plt.tight_layout()
     plt.show()
 
 
 class Model(pl.LightningModule, ABC):
     
-    def __init__(self, n_dim, flow_length, total_n_obs=100, n_sample=40, init_lr=0.01):
+    def __init__(self, n_dim, flow_length,
+                 max_epochs,
+                 total_n_obs,
+                 n_sample,
+                 init_lr):
         
         super().__init__()
         self.flow = NormalizingFlows(dim=n_dim, flow_length=flow_length)
         self.init_lr = init_lr
         self.n_sample = n_sample
         self.total_n_obs = total_n_obs
+        self.max_epochs = max_epochs
+
+        self.n_round = 0
+        self.losses = []
         
     def configure_optimizers(self):
         
         optimizer = optim.Adam(
             self.parameters(),
             lr=self.init_lr)
+        # optimizer = optim.RMSprop(self.parameters(), lr=self.init_lr)
         return optimizer
     
     def training_step(self, batch, batch_idx):
@@ -82,17 +97,24 @@ class Model(pl.LightningModule, ABC):
         x, _ = batch
         
         z0 = self.flow.sample_base_dist(self.n_sample)
-        zk, log_q0, log_sum_det = self.flow(z0) # shape: (n_sample, n_dim), (n_sample, ) (n_sample, ) 
+        zk, log_q0, log_sum_det = self.flow(z0)  # shape: (n_sample, n_dim), (n_sample, ) (n_sample, )
     
         mu, log_var = zk.T
         sigma = torch.exp(0.5 * log_var)
         lls = dist.Normal(mu, sigma).log_prob(x).sum(axis=0)  # shape: (n_obs, n_sample) => (n_sample, )
 
-        scale = self.total_n_obs / x.size(0)
+        if batch_idx == 0:
+            self.n_round += 1
+
+        batch_ratio = self.total_n_obs / x.size(0)
+        beta = min(batch_ratio, 0.01 + batch_ratio*self.n_round/self.max_epochs)  # 0.01  # self.total_n_obs / x.size(0)
         
-        loss = (log_q0 - log_sum_det - scale*lls).sum() / self.total_n_obs
+        loss = (log_q0 - log_sum_det - beta*lls).sum() \
+               / (self.total_n_obs * self.n_sample)
         
-        self.log('loss_epoch', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log('loss_epoch', loss, on_step=False, on_epoch=True,
+                 prog_bar=True, logger=True)
+        self.losses.append(loss.item())
         return loss
     
     def generate_samples(self, n_sample):
@@ -128,10 +150,16 @@ def generate_dataset(mu, sigma, n_obs, seed):
 
 def run_minibatch(dataset, max_epochs, batch_size):
 
-    trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=0)
+    trainloader = torch.utils.data.DataLoader(dataset,
+                                              batch_size=batch_size,
+                                              num_workers=0)
 
-    model = Model(n_dim=2, flow_length=16)
-    trainer = pl.Trainer(max_epochs=max_epochs)
+    model = Model(n_dim=2, flow_length=16,
+                  max_epochs=max_epochs,
+                  n_sample=40,
+                  init_lr=0.01,
+                  total_n_obs=len(dataset))
+    trainer = pl.Trainer(max_epochs=model.max_epochs)
     trainer.fit(model, trainloader)
 
     return model
@@ -139,10 +167,16 @@ def run_minibatch(dataset, max_epochs, batch_size):
 
 def run_oneshot(dataset, max_epochs):
 
-    trainloader = torch.utils.data.DataLoader(dataset, batch_size=len(dataset), num_workers=0)
+    trainloader = torch.utils.data.DataLoader(dataset,
+                                              batch_size=len(dataset),
+                                              num_workers=0)
 
-    model = Model(n_dim=2, flow_length=16)
-    trainer = pl.Trainer(max_epochs=max_epochs)
+    model = Model(n_dim=2, flow_length=16,
+                  n_sample=40,
+                  max_epochs=max_epochs,
+                  init_lr=0.01,
+                  total_n_obs=len(dataset))
+    trainer = pl.Trainer(max_epochs=model.max_epochs)
     trainer.fit(model, trainloader)
 
     return model
@@ -158,14 +192,6 @@ def main():
     dataset, obs_mu, obs_sigma \
         = generate_dataset(mu=true_mu, sigma=true_sigma, n_obs=n_obs, seed=seed)
 
-    model = run_minibatch(dataset, max_epochs=500, batch_size=1)
-
-    mu_samples, log_var_samples = model.generate_samples(n_sample=500)
-    plot_results(
-        true_mu=true_mu, true_sigma=true_sigma,
-        obs_mu=obs_mu, obs_sigma=obs_sigma,
-        mu_samples=mu_samples, log_var_samples=log_var_samples)
-
     # Oneshot for comparison
     model = run_oneshot(dataset, max_epochs=500)
 
@@ -173,7 +199,18 @@ def main():
     plot_results(
         true_mu=true_mu, true_sigma=true_sigma,
         obs_mu=obs_mu, obs_sigma=obs_sigma,
-        mu_samples=mu_samples, log_var_samples=log_var_samples)
+        mu_samples=mu_samples, log_var_samples=log_var_samples,
+        losses=model.losses)
+
+    # Minibatch
+    model = run_minibatch(dataset, max_epochs=500, batch_size=32)
+
+    mu_samples, log_var_samples = model.generate_samples(n_sample=500)
+    plot_results(
+        true_mu=true_mu, true_sigma=true_sigma,
+        obs_mu=obs_mu, obs_sigma=obs_sigma,
+        mu_samples=mu_samples, log_var_samples=log_var_samples,
+        losses=model.losses)
 
 
 if __name__ == "__main__":

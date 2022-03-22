@@ -83,8 +83,12 @@ def run_inference(bkp_name="norm_flows",
 
 def main():
 
-    z_flow, theta_flow, hist_loss, truth = run_inference(load_bkp=False,
-                                                         batch_size=500)
+    z_flow, theta_flow, hist_loss, truth = run_inference(
+        load_bkp=False,
+        initial_lr=0.001,
+        optimizer_kwargs=dict(amsgrad=False, weight_decay=0.01),
+        batch_size=500,
+        epochs=5000)
 
     make_fig(theta_flow=theta_flow, hist_loss=hist_loss, truth=truth)
 

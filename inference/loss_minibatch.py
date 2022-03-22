@@ -5,7 +5,9 @@ from torch import distributions as dist
 
 class LossMinibatch:
     @staticmethod
-    def __call__(z_flow, theta_flow, n_sample, total_n_obs, n_u, n_w,
+    def __call__(z_flow, theta_flow, n_sample, total_n_obs,
+                 total_n_epochs, epoch,
+                 n_u, n_w,
                  u, w, x, r, y):
         # Get unique users for this (mini)batch
         uniq_u = np.unique(u)
@@ -62,6 +64,7 @@ class LossMinibatch:
         sum_ln_det = sum_ld_θ + sum_ld_Z  # sum log determinant
         lls = ll + ll_Zu1 + ll_Zu2 + ll_Zw1 + ll_Zw2
 
-        scale = total_n_obs / x.size(0)
-        loss = (ln_q0 - sum_ln_det - scale*lls).sum() / (n_sample * total_n_obs)
+        batch_ratio = total_n_obs / x.size(0)
+        # beta = min(batch_ratio, 0.01 + batch_ratio*epoch/total_n_epochs)
+        loss = (ln_q0 - sum_ln_det - batch_ratio*lls).sum() / (n_sample * total_n_obs)
         return loss
