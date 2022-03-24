@@ -85,8 +85,8 @@ def main():
 
     z_flow, theta_flow, hist_loss, truth = run_inference(
         load_bkp=False,
-        initial_lr=0.001,
-        optimizer_kwargs=dict(amsgrad=False, weight_decay=0.01),
+        initial_lr=0.0001,
+        optimizer_kwargs=dict(amsgrad=False, weight_decay=0.02),
         batch_size=500,
         epochs=5000)
 
