@@ -9,7 +9,7 @@ from inference.train_minibatch import train_minibatch
 from plot.plot_hist_loss import plot_loss
 from plot.plot_posterior import plot_posterior
 
-RUN_NAME = "artificial_minibatch"
+RUN_NAME = "artificial_minibatch_OTHER_2"
 
 BKP_FOLDER = f'bkp/{RUN_NAME}'
 FIG_FOLDER = f'fig/{RUN_NAME}'
@@ -85,8 +85,8 @@ def main():
 
     z_flow, theta_flow, hist_loss, truth = run_inference(
         load_bkp=False,
-        initial_lr=0.0001,
-        optimizer_kwargs=dict(amsgrad=False, weight_decay=0.02),
+        initial_lr=0.00001,
+        optimizer_kwargs=dict(amsgrad=True, weight_decay=0.1),
         batch_size=500,
         epochs=5000)
 
