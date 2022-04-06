@@ -28,15 +28,18 @@ def make_fig(theta_flow, hist_loss, truth):
         hist_loss=hist_loss)
 
 
-def run_inference(bkp_name="norm_flows",
-                  load_bkp=True,
-                  n_sample=40,
-                  epochs=5000,
-                  flow_length=16,
-                  optimizer_name="Adam",
-                  optimizer_kwargs=None,
-                  initial_lr=0.01,
-                  seed=123):
+def run_inference(
+        data,
+        truth,
+        bkp_name,
+        load_bkp=True,
+        n_sample=40,
+        epochs=5000,
+        flow_length=16,
+        optimizer_name="Adam",
+        optimizer_kwargs=None,
+        initial_lr=0.01,
+        seed=123):
 
     z_bkp_file = f"{BKP_FOLDER}/{bkp_name}_z.p"
     theta_bkp_file = f"{BKP_FOLDER}/{bkp_name}_theta.p"
@@ -55,8 +58,6 @@ def run_inference(bkp_name="norm_flows",
         except FileNotFoundError:
             print("Didn't find backup. Run the inference process instead...")
 
-    data, truth = simulate(use_torch=True, seed=SEED_DATA_GENERATION)
-
     z_flow, theta_flow, hist_loss = train(
         data=data,
         n_sample=n_sample,
@@ -72,12 +73,17 @@ def run_inference(bkp_name="norm_flows",
     np.save(file=hist_bkp_file, arr=np.asarray(hist_loss))
     torch.save(obj=truth, f=truth_bkp_file)
 
-    return z_flow, theta_flow, hist_loss, truth
+    return z_flow, theta_flow, hist_loss
 
 
 def main():
 
-    z_flow, theta_flow, hist_loss, truth = run_inference(load_bkp=False)
+    data, truth = simulate(use_torch=True, seed=SEED_DATA_GENERATION)
+    z_flow, theta_flow, hist_loss = run_inference(
+        data=data,
+        truth=truth,
+        bkp_name="norm_flows",
+        load_bkp=True)
     make_fig(theta_flow=theta_flow, hist_loss=hist_loss, truth=truth)
 
 
