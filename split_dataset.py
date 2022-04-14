@@ -1,23 +1,10 @@
-import matplotlib.pyplot as plt
-import pandas as pd
-import seaborn as sns
-import numpy as np
-import optuna
-import pickle
-import torch
+from torch.utils.data import DataLoader, random_split
+
+from inference.train import train
 
 from simulate.simulate import simulate
 
-from inference.loss import LossTeaching
-from inference.train_minibatch import train_minibatch
-from inference.flows import NormalizingFlows
-from inference.loss_minibatch import LossMinibatch
-
-from plot.plot_hist_loss import plot_loss
-from plot.plot_posterior import plot_posterior
-from plot.loss_tracker import LossTracker
-
-from run_oneshot_artificial import run_inference, SEED_DATA_GENERATION
+SEED_DATA_GENERATION = 0
 
 
 def main():
@@ -28,16 +15,43 @@ def main():
 
     prop_training = 0.8
     n_training = int(prop_training*n)
+    n_testing = n - n_training
 
-    train_set, val_set = torch.utils.data.random_split(
+    train_set, val_set = random_split(
         dataset,
-        [n_training, n - n_training])
+        [n_training, n_testing])
 
-    z_flow, theta_flow, hist_loss = run_inference(
-        data=train_set,
+    print("N training", n_training)
+    print("N testing", n_testing)
+
+    batch_size = n
+
+    training_data = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    validation_data = DataLoader(val_set, batch_size=n_testing, shuffle=True)
+
+    z_flow, theta_flow, hist_loss, hist_loss_val = train(
+
         truth=truth,
         load_bkp=False,
-        bkp_name="norm_flow_split")
+        bkp_name="norm_flow_split",
+        epochs=0)
+
+    # # for d in val_data:
+    # log_loss = loss_val(
+    #     n_u=dataset.n_u,
+    #     n_w=dataset.n_w,
+    #     z_flow=z_flow,
+    #     n_sample=100,
+    #     **val_data)
+
+    # print(log_loss.item())
+
+    # loss = torch.nn.BCELoss()
+    # print(loss(torch.ones(n_testing, dtype=torch.double)*0.5, val_data['y'].squeeze()))
+    # 0.6931
+
+
+
 
 
 

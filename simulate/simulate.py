@@ -10,6 +10,8 @@ def simulate(
         sg_u=(0.5, 0.2),
         sg_w=(1.0, 0.4),
         mu=(-4., -2.),
+        min_x=5,
+        max_x=1000,
         n_u=20,
         n_w=20,
         n_obs_per_wu=100,
@@ -31,7 +33,7 @@ def simulate(
     Zu = np.random.normal(np.zeros(2), sg_u, size=(n_u, 2))
     Zw = np.random.normal(np.zeros(2), sg_w, size=(n_w, 2))
 
-    x = np.random.uniform(5, 1000, size=n_obs)
+    x = np.random.uniform(min_x, max_x, size=n_obs)
     rd = np.random.random(size=n_obs)
 
     y = np.zeros(shape=n_obs)

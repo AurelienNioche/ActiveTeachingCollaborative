@@ -1,16 +1,13 @@
 import os
-import numpy as np
-import torch
 
 from inference.train import train
-from inference.flows import NormalizingFlows
 from simulate.simulate import simulate
 from plot.plot_hist_loss import plot_loss
 from plot.plot_posterior import plot_posterior
 
-BKP_FOLDER = 'bkp/artificial'
+
 FIG_FOLDER = 'fig/artificial'
-os.makedirs(BKP_FOLDER, exist_ok=True)
+
 os.makedirs(FIG_FOLDER, exist_ok=True)
 
 
@@ -28,62 +25,19 @@ def make_fig(theta_flow, hist_loss, truth):
         hist_loss=hist_loss)
 
 
-def run_inference(
-        data,
-        truth,
-        bkp_name,
-        load_bkp=True,
-        n_sample=40,
-        epochs=5000,
-        flow_length=16,
-        optimizer_name="Adam",
-        optimizer_kwargs=None,
-        initial_lr=0.01,
-        seed=123):
-
-    z_bkp_file = f"{BKP_FOLDER}/{bkp_name}_z.p"
-    theta_bkp_file = f"{BKP_FOLDER}/{bkp_name}_theta.p"
-    hist_bkp_file = f"{BKP_FOLDER}/{bkp_name}_hist_loss.npy"
-    truth_bkp_file = f"{BKP_FOLDER}/{bkp_name}_truth.p"
-
-    if load_bkp:
-        try:
-            z_flow = NormalizingFlows.load(z_bkp_file)
-            theta_flow = NormalizingFlows.load(theta_bkp_file)
-            hist_loss = np.load(hist_bkp_file)
-            truth = torch.load(truth_bkp_file)
-            print("Load successfully from backup")
-            return z_flow, theta_flow, hist_loss, truth
-
-        except FileNotFoundError:
-            print("Didn't find backup. Run the inference process instead...")
-
-    z_flow, theta_flow, hist_loss = train(
-        data=data,
-        n_sample=n_sample,
-        epochs=epochs,
-        flow_length=flow_length,
-        optimizer_name=optimizer_name,
-        optimizer_kwargs=optimizer_kwargs,
-        initial_lr=initial_lr,
-        seed=seed)
-
-    z_flow.save(z_bkp_file)
-    theta_flow.save(theta_bkp_file)
-    np.save(file=hist_bkp_file, arr=np.asarray(hist_loss))
-    torch.save(obj=truth, f=truth_bkp_file)
-
-    return z_flow, theta_flow, hist_loss
-
-
 def main():
 
-    data, truth = simulate(use_torch=True, seed=SEED_DATA_GENERATION)
-    z_flow, theta_flow, hist_loss = run_inference(
-        data=data,
+    dataset, truth = simulate(use_torch=True, seed=SEED_DATA_GENERATION,
+                              use_torch_dataset=True)
+
+    z_flow, theta_flow, hist_loss, hist_val_loss = train(
+        dataset=dataset,
+        batch_size=len(dataset),
+        training_split=1.0,
         truth=truth,
+        bkp_folder="bkp",
         bkp_name="norm_flows",
-        load_bkp=True)
+        load_if_exists=True)
     make_fig(theta_flow=theta_flow, hist_loss=hist_loss, truth=truth)
 
 
