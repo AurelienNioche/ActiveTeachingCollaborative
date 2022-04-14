@@ -30,14 +30,14 @@ def main():
     dataset, truth = simulate(use_torch=True, seed=SEED_DATA_GENERATION,
                               use_torch_dataset=True)
 
-    z_flow, theta_flow, hist_loss, hist_val_loss = train(
+    z_flow, theta_flow, hist_loss, hist_val, hist_train = train(
         dataset=dataset,
         batch_size=len(dataset),
         training_split=1.0,
         truth=truth,
-        bkp_folder="bkp",
+        bkp_folder="bkp/run_oneshot_artificial",
         bkp_name="norm_flows",
-        load_if_exists=True)
+        load_if_exists=False)
     make_fig(theta_flow=theta_flow, hist_loss=hist_loss, truth=truth)
 
 

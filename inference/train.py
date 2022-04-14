@@ -6,8 +6,9 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader, random_split
 
 from . flows import NormalizingFlows
-from . loss import LossTeaching
-from . loss_validation import LossTeachingValidation
+from . loss.bce import BCETeaching
+from . loss.elbo import ELBOTeaching
+from . loss.accuracy import AccuracyTeaching
 
 
 def train(
@@ -32,7 +33,8 @@ def train(
     z_bkp_file = f"{bkp_folder}/{bkp_name}_z.p"
     theta_bkp_file = f"{bkp_folder}/{bkp_name}_theta.p"
     hist_loss_bkp_file = f"{bkp_folder}/{bkp_name}_hist_loss.npy"
-    hist_loss_val_bkp_file = f"{bkp_folder}/{bkp_name}_hist_loss_val.npy"
+    hist_val_bkp_file = f"{bkp_folder}/{bkp_name}_hist_val.npy"
+    hist_train_bkp_file = f"{bkp_folder}/{bkp_name}_hist_train.npy"
     truth_bkp_file = f"{bkp_folder}/{bkp_name}_truth.p"
 
     if load_if_exists:
@@ -40,11 +42,12 @@ def train(
             z_flow = NormalizingFlows.load(z_bkp_file)
             theta_flow = NormalizingFlows.load(theta_bkp_file)
             hist_loss = np.load(hist_loss_bkp_file)
-            hist_loss_val = np.load(hist_loss_val_bkp_file)
+            hist_val = torch.load(hist_val_bkp_file)
+            hist_train = torch.load(hist_train_bkp_file)
             if truth is not None:
                 truth = torch.load(truth_bkp_file)
             print("Load successfully from backup")
-            return z_flow, theta_flow, hist_loss, hist_loss_val, truth
+            return z_flow, theta_flow, hist_loss, hist_val, hist_train
 
         except FileNotFoundError:
             print("Didn't find backup. Run the inference process instead...")
@@ -59,28 +62,27 @@ def train(
 
     if training_split < 1.0:
         n_training = int(training_split * n)
-        n_testing = n - n_training
+        n_validation = n - n_training
 
         train_set, val_set = random_split(
             dataset,
-            [n_training, n_testing])
+            [n_training, n_validation])
 
         print("N training", n_training)
-        print("N testing", n_testing)
+        print("N validation", n_validation)
 
         training_data = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-        validation_data = DataLoader(val_set, batch_size=n_testing, shuffle=True)
+        validation_data = DataLoader(val_set, batch_size=n_validation, shuffle=True)
     else:
-        training_data = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        training_data = DataLoader(dataset, batch_size=n, shuffle=False)
+        n_training = n
+        n_validation = 0
         validation_data = ()
 
     n_u, n_w = dataset.n_u, dataset.n_w
 
     z_flow = NormalizingFlows(dim=(n_u + n_w) * 2, flow_length=flow_length)
     theta_flow = NormalizingFlows(6, flow_length=flow_length)
-
-    loss_func = LossTeaching()
-    loss_val_func = LossTeachingValidation()
 
     if optimizer_kwargs is None:
         optimizer_kwargs = {}
@@ -94,13 +96,26 @@ def train(
     else:
         scheduler = None
 
-    total_n_obs = len(training_data)
+    hist_loss = []
 
-    hist_loss, hist_loss_val = [], []
+    loss_func = ELBOTeaching()
+
+    metrics = {
+        "bce": BCETeaching(),
+        "elbo": ELBOTeaching(),
+        "accuracy": AccuracyTeaching()
+    }
+
+    hist_val = {k: [] for k in metrics}
+    hist_train = {k: [] for k in metrics}
 
     with tqdm(total=epochs) as pbar:
 
         for i in range(epochs):
+
+            theta_flow.train()
+            z_flow.train()
+
             for d in training_data:
 
                 optimizer.zero_grad()
@@ -110,7 +125,7 @@ def train(
                                  n_sample=n_sample,
                                  n_u=n_u,
                                  n_w=n_w,
-                                 total_n_obs=total_n_obs,
+                                 total_n_obs=n_training,
                                  **d)
 
                 loss.backward()
@@ -130,25 +145,62 @@ def train(
 
             pbar.update()
 
-        loss_val = 0
-        for d in validation_data:
-            loss_val += loss_val_func(z_flow=z_flow,
-                                      n_sample=n_sample,
-                                      n_u=n_u,
-                                      n_w=n_w,
-                                      **d).item()
-        hist_loss_val.append(loss_val)
+            z_flow.eval()
+            theta_flow.eval()
+
+            with torch.no_grad():
+                val = {k: [] for k in metrics}
+                for d in validation_data:
+                    for k, func in metrics.items():
+                        val[k].append(func(
+                            z_flow=z_flow,
+                            n_sample=n_sample,
+                            n_u=n_u,
+                            n_w=n_w,
+                            **d).item())
+
+                val = {k: [] for k in metrics}
+                for d in validation_data:
+                    for k, func in metrics.items():
+                        val[k].append(func(
+                            z_flow=z_flow,
+                            theta_flow=theta_flow,
+                            n_sample=n_sample,
+                            n_u=n_u,
+                            n_w=n_w,
+                            total_n_obs=n_validation,
+                            **d).item())
+
+                for k in metrics:
+                    if len(val[k]):
+                        hist_val[k].append(np.mean(val[k]))
+
+                val = {k: [] for k in metrics}
+                for d in training_data:
+                    for k, func in metrics.items():
+                        val[k].append(func(
+                            z_flow=z_flow,
+                            theta_flow=theta_flow,
+                            n_sample=n_sample,
+                            n_u=n_u,
+                            n_w=n_w,
+                            total_n_obs=n_training,
+                            **d).item())
+
+                for k in metrics:
+                    hist_train[k].append(np.mean(val[k]))
 
     os.makedirs(bkp_folder, exist_ok=True)
 
     z_flow.save(z_bkp_file)
     theta_flow.save(theta_bkp_file)
     np.save(file=hist_loss_bkp_file, arr=np.asarray(hist_loss))
-    np.save(file=hist_loss_val_bkp_file, arr=np.asarray(hist_loss_val))
+    torch.save(f=hist_train_bkp_file, obj=hist_train)
+    torch.save(f=hist_val_bkp_file, obj=hist_val)
 
     if truth is not None:
         torch.save(obj=truth, f=truth_bkp_file)
 
-    return z_flow, theta_flow, hist_loss
+    return z_flow, theta_flow, hist_loss, hist_val, hist_train
 
 

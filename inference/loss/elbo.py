@@ -3,7 +3,7 @@ import torch
 from torch import distributions as dist
 
 
-class LossTeaching:
+class ELBOTeaching:
     @staticmethod
     def __call__(z_flow, theta_flow, n_sample,
                  total_n_obs,
@@ -70,4 +70,6 @@ class LossTeaching:
         batch_ratio = total_n_obs / x.size(0)
         # beta = min(batch_ratio, 0.01 + batch_ratio*epoch/total_n_epochs)
         loss = (ln_q0 - sum_ln_det - batch_ratio*lls) / (n_sample * total_n_obs)
+
+        # Return - ELBO
         return loss

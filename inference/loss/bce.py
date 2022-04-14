@@ -3,7 +3,7 @@ from torch.nn import BCELoss
 import torch.distributions as dist
 
 
-class LossTeachingValidation(BCELoss):
+class BCETeaching(BCELoss):
 
     def __init__(self):
         super().__init__()
@@ -13,14 +13,12 @@ class LossTeachingValidation(BCELoss):
                  # total_n_epochs,
                  # epoch,
                  n_u, n_w,
-                 u, w, x, r, y):
+                 u, w, x, r, y,
+                 **kwargs):
+
         # Z: Sample base distribution and apply transformation
         z0_Z = z_flow.sample_base_dist(n_sample)
         zk_Z, ln_q0_Z, sum_ld_Z = z_flow(z0_Z)
-
-        # # θ: Sample base distribution and apply transformation
-        # z0_θ = theta_flow.sample_base_dist(n_sample)
-        # zk_θ, ln_q0_θ, sum_ld_θ = theta_flow(z0_θ)
 
         # Get Z-values used for first parameter
         Zu1 = zk_Z[:, :n_u].T
@@ -29,10 +27,6 @@ class LossTeachingValidation(BCELoss):
         # Get Z-values used for second parameter
         Zu2 = zk_Z[:, n_w + n_u:n_w + n_u * 2].T
         Zw2 = zk_Z[:, n_w + n_u * 2:].T
-
-        # Get Z-values used for second first parameter
-        # half_mu1, log_var_u1, log_var_w1 = zk_θ[:, :3].T
-        # half_mu2, log_var_u2, log_var_w2 = zk_θ[:, 3:].T
 
         # Compute Z-values for both parameters
         Z1 = Zu1[u] + Zw1[w]
@@ -48,4 +42,4 @@ class LossTeachingValidation(BCELoss):
         # Comp. log-likelihood of observations
         ll = dist.Bernoulli(probs=torch.exp(log_p)).log_prob(y).sum(axis=1)
 
-        return super()(torch.exp(ll), y.squeeze())
+        return super().__call__(torch.exp(ll), y.squeeze())
