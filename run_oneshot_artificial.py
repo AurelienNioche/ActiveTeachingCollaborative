@@ -73,6 +73,8 @@ def run_inference(
     np.save(file=hist_bkp_file, arr=np.asarray(hist_loss))
     torch.save(obj=truth, f=truth_bkp_file)
 
+    print("hy ")
+
     return z_flow, theta_flow, hist_loss
 
 
@@ -83,7 +85,7 @@ def main():
         data=data,
         truth=truth,
         bkp_name="norm_flows",
-        load_bkp=True)
+        load_bkp=False)
     make_fig(theta_flow=theta_flow, hist_loss=hist_loss, truth=truth)
 
 
