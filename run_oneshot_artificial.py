@@ -37,7 +37,7 @@ def main():
         truth=truth,
         bkp_folder="bkp/run_oneshot_artificial",
         bkp_name="norm_flows",
-        load_if_exists=False)
+        load_if_exists=True)
     make_fig(theta_flow=theta_flow, hist_loss=hist_loss, truth=truth)
 
 
