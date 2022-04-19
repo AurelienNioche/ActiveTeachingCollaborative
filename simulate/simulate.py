@@ -30,15 +30,16 @@ def simulate(
     r[:] = np.tile(np.concatenate(
         [np.arange(1, n_obs_per_wu + 1, dtype=int) for _ in range(n_w)]), n_u)
 
-    Zu = np.random.normal(np.zeros(2), sg_u, size=(n_u, 2))
-    Zw = np.random.normal(np.zeros(2), sg_w, size=(n_w, 2))
+    half_mu = mu / 2.
+    Zu = np.random.normal(half_mu, sg_u, size=(n_u, 2))
+    Zw = np.random.normal(half_mu, sg_w, size=(n_w, 2))
 
     x = np.random.uniform(min_x, max_x, size=n_obs)
     rd = np.random.random(size=n_obs)
 
     y = np.zeros(shape=n_obs)
 
-    Z = mu + Zu[u] + Zw[w]
+    Z = Zu[u] + Zw[w]
 
     a = np.exp(Z[:, 0])
     b = expit(Z[:, 1])
@@ -54,7 +55,12 @@ def simulate(
     sg_w_smp = np.std(Zw, axis=0)
     mu_smp = np.mean(Z, axis=0)
     truth = {'mu': mu, 'sg_u': sg_u, 'sg_w': sg_w,
-             'mu_smp': mu_smp, 'sg_u_smp': sg_u_smp, 'sg_w_smp': sg_w_smp}
+             'mu_smp': mu_smp, 'sg_u_smp': sg_u_smp, 'sg_w_smp': sg_w_smp,
+             'p': p,
+             'Zu1': Zu[:, 0],
+             'Zu2': Zu[:, 1],
+             'Zw1': Zw[:, 0],
+             'Zw2': Zw[:, 1]}
 
     if use_torch or use_torch_dataset:
         data = {
