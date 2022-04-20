@@ -59,7 +59,7 @@ def main():
                               seed=SEED_DATA_GENERATION,
                               use_torch_dataset=True)
 
-    z_flow, theta_flow, hist_train, hist_val = train(
+    z_flow, theta_flow, hist_train, hist_val, hist_comp_truth, config = train(
         dataset=dataset,
         batch_size=len(dataset),
         training_split=1.0,

@@ -7,9 +7,9 @@ from torch.utils.data import Dataset
 
 def simulate(
         seed,
-        sg_u=(0.5, 0.2),
-        sg_w=(1.0, 0.4),
-        mu=(-4., -2.),
+        sg_u=np.array([0.5, 0.2]),
+        sg_w=np.array([1.0, 0.4]),
+        mu=np.array([-4., -2.]),
         min_x=5,
         max_x=1000,
         n_u=20,
@@ -54,13 +54,24 @@ def simulate(
     sg_u_smp = np.std(Zu, axis=0)
     sg_w_smp = np.std(Zw, axis=0)
     mu_smp = np.mean(Z, axis=0)
-    truth = {'mu': mu, 'sg_u': sg_u, 'sg_w': sg_w,
-             'mu_smp': mu_smp, 'sg_u_smp': sg_u_smp, 'sg_w_smp': sg_w_smp,
-             'p': p,
-             'Zu1': Zu[:, 0],
-             'Zu2': Zu[:, 1],
-             'Zw1': Zw[:, 0],
-             'Zw2': Zw[:, 1]}
+    truth = {
+        'mu1': mu[0],
+        'mu2': mu[1],
+        'sg_u1': sg_u[0],
+        'sg_u2': sg_u[1],
+        'sg_w1': sg_w[0],
+        'sg_w2': sg_w[1],
+        'mu_smp': mu_smp,
+        'sg_u1_smp': sg_u_smp[0],
+        'sg_u2_smp': sg_u_smp[1],
+        'sg_w1_smp': sg_w_smp[0],
+        'sg_w2_smp': sg_w_smp[1],
+        'p': p,
+        'Zu1': Zu[:, 0],
+        'Zu2': Zu[:, 1],
+        'Zw1': Zw[:, 0],
+        'Zw2': Zw[:, 1]
+    }
 
     if use_torch or use_torch_dataset:
         data = {
