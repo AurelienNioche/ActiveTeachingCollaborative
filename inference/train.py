@@ -320,19 +320,20 @@ def train(
                 for k in parameters:
                     hist['comp_truth_train'][k].append(np.mean(param_values[k]))
 
-            pbar.set_postfix({'loss': hist['train']['free_energy'][-1]})
+            pbar.set_postfix({'loss': loss.item()})
             pbar.update()
 
             z_flow.eval()
             theta_flow.eval()
 
             metric_values = {k: [] for k in metrics}
+            param_values = {k: [] for k in parameters}
 
             with torch.no_grad():
 
                 for d in validation_data:
 
-                    ll, elbo_kwargs = likelihood(
+                    ll, ll_var = likelihood(
                         z_flow=z_flow,
                         n_sample=n_sample,
                         n_u=n_u,
@@ -352,8 +353,7 @@ def train(
                                 theta_flow=theta_flow,
                                 n_sample=n_sample,
                                 ll=ll,
-                                **d,
-                                **elbo_kwargs,
+                                **ll_var,
                                 total_n_obs=n_validation,
                                 batch_size=batch_size)
                             r = fe.item()
@@ -361,6 +361,28 @@ def train(
                             raise ValueError(f'Metric not recognized: {k}')
 
                         metric_values[k].append(r)
+
+                    if truth is not None:
+
+                        for k in key_vars_ll:
+                            try:
+                                obs = ll_var[k].mean(axis=1)
+                                delta = (obs - truth[k]).abs().mean().item()
+                                param_values[k].append(delta)
+                            except Exception as e:
+                                raise e
+
+                        for k in key_vars_free_energy:
+
+                            obs = loss_var[k].mean()
+                            delta = (obs - truth[k]).abs().item()
+                            param_values[k].append(delta)
+
+                        obs = torch.exp(ll_var['log_p']).mean(axis=1)
+                        index = d['i']
+                        tr = truth['p'][index]
+                        delta = (obs - tr).abs().mean().item()
+                        param_values['p'].append(delta)
 
             for k in metrics:
                 v = metric_values[k]
@@ -371,7 +393,7 @@ def train(
                 for k in parameters:
                     v = param_values[k]
                     if len(v):
-                        hist['comp_truth_train'][k].append(np.mean(v))
+                        hist['comp_truth_val'][k].append(np.mean(v))
 
     config = dict(
         batch_size=batch_size,

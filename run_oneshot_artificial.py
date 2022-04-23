@@ -7,11 +7,6 @@ from plot.plot_hist_loss import plot_loss
 from plot.plot_posterior import plot_posterior
 
 
-FIG_FOLDER = 'fig/artificial'
-
-os.makedirs(FIG_FOLDER, exist_ok=True)
-
-
 SEED_DATA_GENERATION = 0
 
 
@@ -21,7 +16,7 @@ def plot_metric(hist_train, hist_val, path):
 
     n_row = len(metrics)
 
-    fig, axes = plt.subplots(nrows=n_row, figsize=(10, 5))
+    fig, axes = plt.subplots(nrows=n_row, figsize=(10, n_row*5))
 
     for i, k in enumerate(metrics):
         ax = axes[i]
@@ -36,21 +31,32 @@ def plot_metric(hist_train, hist_val, path):
     plt.savefig(path)
 
 
-def make_fig(theta_flow, hist_train, hist_val, truth):
+def make_fig(theta_flow, hist, truth, fig_folder):
+
+    os.makedirs(fig_folder, exist_ok=True)
 
     print("Making the plots...")
     plot_posterior(
-        path=f"{FIG_FOLDER}/posterior.pdf",
+        path=f"{fig_folder}/posterior.pdf",
         theta_flow=theta_flow,
         truth=truth)
+
     plot_loss(
-        path=f"{FIG_FOLDER}/loss.pdf",
-        hist_loss=hist_train['free_energy'])
+        path=f"{fig_folder}/loss.pdf",
+        hist_loss=hist['train']['free_energy'])
 
     plot_metric(
-        path=f"{FIG_FOLDER}/hist_metric.pdf",
-        hist_train=hist_train,
-        hist_val=hist_val)
+        path=f"{fig_folder}/hist_metric.pdf",
+        hist_train=hist['train'],
+        hist_val=hist['val'])
+
+    plot_metric(
+        path=f"{fig_folder}/hist_comp_truth.pdf",
+        hist_train=hist['comp_truth_train'],
+        hist_val=hist['comp_truth_val'])
+
+    print(hist['comp_truth_train'])
+    print(hist['comp_truth_val'])
 
 
 def main():
@@ -59,19 +65,27 @@ def main():
                               seed=SEED_DATA_GENERATION,
                               use_torch_dataset=True)
 
-    z_flow, theta_flow, hist_train, hist_val, hist_comp_truth, config = train(
-        dataset=dataset,
-        batch_size=len(dataset),
-        training_split=0.9,
-        truth=truth,
-        bkp_folder="bkp/run_oneshot_artificial",
-        bkp_name="norm_flows",
-        load_if_exists=False)
+    for batch_size, learning_rate in (len(dataset), 0.01), (64, 10e-8), (int(0.10*len(dataset)), 10e-8):
+        for training_split in 1.0, 0.9, 0.75:
 
-    make_fig(theta_flow=theta_flow,
-             hist_train=hist_train,
-             hist_val=hist_val,
-             truth=truth)
+            bkp_name = f"run_oneshot_artificial_bs{batch_size}_ts{int(training_split*100)}"
+
+            z_flow, theta_flow, hist, config = train(
+                epochs=5000,
+                initial_lr=learning_rate,
+                dataset=dataset,
+                batch_size=batch_size, #len(dataset),
+                training_split=training_split,
+                truth=truth,
+                bkp_folder="bkp",
+                bkp_name=bkp_name,
+                load_if_exists=False)
+
+            make_fig(
+                fig_folder=f"fig/{bkp_name}",
+                theta_flow=theta_flow,
+                hist=hist,
+                truth=truth)
 
 
 if __name__ == "__main__":

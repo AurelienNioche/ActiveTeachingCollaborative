@@ -26,10 +26,10 @@ def plot_posterior(path, theta_flow, batch_size=1000, truth=None):
         ax.set_ylabel("$log(\sigma^2)$")
 
         if truth is not None:
-            ax.scatter(truth['mu'][0] / 2, np.log(truth['sg_u'][0] ** 2),
+            ax.scatter(truth['mu1'] / 2, np.log(truth['sg_u1'] ** 2),
                        edgecolors='C3', alpha=1,
                        label='theoretical', facecolors='none', s=40)
-            ax.scatter(truth['mu_smp'][0] / 2, np.log(truth['sg_u_smp'][0] ** 2),
+            ax.scatter(truth['mu1_smp'] / 2, np.log(truth['sg_u1_smp'] ** 2),
                        facecolors='none', edgecolors='C3', alpha=1, s=80,
                        linewidths=3, label="data")
         ax.legend()
@@ -41,10 +41,10 @@ def plot_posterior(path, theta_flow, batch_size=1000, truth=None):
         ax.set_xlabel("$\mu /2$")
         ax.set_ylabel("$log(\sigma^2)$")
         if truth is not None:
-            ax.scatter(truth['mu'][0] / 2, np.log(truth['sg_w'][0] ** 2),
+            ax.scatter(truth['mu1'] / 2, np.log(truth['sg_w1'] ** 2),
                        edgecolors='C3',
                        label='theoretical', facecolors='none', s=40)
-            ax.scatter(truth['mu_smp'][0] / 2, np.log(truth['sg_w_smp'][0] ** 2),
+            ax.scatter(truth['mu1_smp'] / 2, np.log(truth['sg_w1_smp'] ** 2),
                        facecolors='none', edgecolors='C3', alpha=1, s=80,
                        linewidths=3, label="data")
         ax.legend()
@@ -57,10 +57,10 @@ def plot_posterior(path, theta_flow, batch_size=1000, truth=None):
         ax.set_xlabel("$\mu /2$")
         ax.set_ylabel("$log(\sigma^2)$")
         if truth is not None:
-            ax.scatter(truth['mu'][1] / 2, np.log(truth['sg_u'][1] ** 2),
+            ax.scatter(truth['mu2'] / 2, np.log(truth['sg_u2'] ** 2),
                        edgecolors='C3',
                        label='theoretical', facecolors='none', s=40)
-            ax.scatter(truth['mu_smp'][1] / 2, np.log(truth['sg_u_smp'][1] ** 2),
+            ax.scatter(truth['mu2_smp'] / 2, np.log(truth['sg_u2_smp'] ** 2),
                        facecolors='none', edgecolors='C3', s=80,
                        linewidths=3, label="data")
         ax.legend()
@@ -72,10 +72,10 @@ def plot_posterior(path, theta_flow, batch_size=1000, truth=None):
         ax.set_xlabel("$\mu /2$")
         ax.set_ylabel("$log(\sigma^2)$")
         if truth is not None:
-            ax.scatter(truth['mu'][1] / 2, np.log(truth['sg_w'][1] ** 2),
+            ax.scatter(truth['mu2'] / 2, np.log(truth['sg_w2'] ** 2),
                        edgecolors='C3', alpha=1,
                        label='theoretical', facecolors='none', s=40)
-            ax.scatter(truth['mu_smp'][1] / 2, np.log(truth['sg_w_smp'][1] ** 2),
+            ax.scatter(truth['mu2_smp'] / 2, np.log(truth['sg_w2_smp'] ** 2),
                        facecolors='none', edgecolors='C3', alpha=1, s=80,
                        linewidths=3, label="data")
         ax.legend()
