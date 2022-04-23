@@ -79,7 +79,9 @@ def simulate(
             'y': torch.from_numpy(data['y'].reshape(-1, 1)),
             'r': torch.from_numpy(data['r'].reshape(-1, 1)),
             'u': data['u'],
-            'w': data['w']}
+            'w': data['w'],
+            'i': np.arange(n_obs)
+        }
 
     # extra step to have a dataset object
     if use_torch_dataset:
@@ -90,13 +92,14 @@ def simulate(
 
 
 class TeachingDataset(Dataset):
-    def __init__(self, u, w, x, r, y):
+    def __init__(self, u, w, x, r, y, i):
         super().__init__()
         self.x = x  # torch.from_numpy(x.reshape(-1, 1))
         self.y = y  # torch.from_numpy(y.reshape(-1, 1))
         self.r = r  # torch.from_numpy(r.reshape(-1, 1))
         self.u = u
         self.w = w
+        self.i = i
 
         self.n_u = len(np.unique(u))
         self.n_w = len(np.unique(w))
@@ -110,4 +113,5 @@ class TeachingDataset(Dataset):
                 'y': self.y[idx],
                 'r': self.r[idx],
                 'u': self.u[idx],
-                'w': self.w[idx]}
+                'w': self.w[idx],
+                'i': self.i[idx]}

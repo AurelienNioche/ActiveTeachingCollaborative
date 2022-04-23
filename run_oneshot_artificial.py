@@ -62,7 +62,7 @@ def main():
     z_flow, theta_flow, hist_train, hist_val, hist_comp_truth, config = train(
         dataset=dataset,
         batch_size=len(dataset),
-        training_split=1.0,
+        training_split=0.9,
         truth=truth,
         bkp_folder="bkp/run_oneshot_artificial",
         bkp_name="norm_flows",

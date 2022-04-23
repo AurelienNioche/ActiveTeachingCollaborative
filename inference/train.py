@@ -12,7 +12,8 @@ from . flows import NormalizingFlows
 def likelihood(
         z_flow, n_sample,
         n_u, n_w,
-        u, w, x, r, y
+        u, w, x, r, y,
+        **kwargs
 ):
 
     # Z: Sample base distribution and apply transformation
@@ -63,7 +64,8 @@ def free_energy(
         ln_q0_Z,
         sum_ld_Z,
         total_n_obs,
-        batch_size,):
+        batch_size,
+        **kwargs):
 
     # # Get unique users for this (mini)batch
     # uniq_u = np.unique(u)
@@ -131,9 +133,7 @@ def train(
 
     z_bkp_file = f"{bkp_folder}/{bkp_name}_z.p"
     theta_bkp_file = f"{bkp_folder}/{bkp_name}_theta.p"
-    hist_train_bkp_file = f"{bkp_folder}/{bkp_name}_hist_train.p"
-    hist_val_bkp_file = f"{bkp_folder}/{bkp_name}_hist_val.p"
-    hist_comp_truth_bkp_file = f"{bkp_folder}/{bkp_name}_hist_comp_truth.p"
+    hist_bkp_file = f"{bkp_folder}/{bkp_name}_hist.p"
     truth_bkp_file = f"{bkp_folder}/{bkp_name}_truth.p"
     config_bkp_file = f"{bkp_folder}/{bkp_name}_config.p"
 
@@ -141,17 +141,13 @@ def train(
         try:
             z_flow = NormalizingFlows.load(z_bkp_file)
             theta_flow = NormalizingFlows.load(theta_bkp_file)
-            hist_val = torch.load(hist_val_bkp_file)
-            hist_train = torch.load(hist_train_bkp_file)
+            hist = torch.load(hist_bkp_file)
             config = torch.load(config_bkp_file)
             if truth is not None:
-                hist_comp_truth = torch.load(hist_comp_truth_bkp_file)
                 truth = torch.load(truth_bkp_file)
 
-            else:
-                hist_comp_truth = None
             print("Load successfully from backup")
-            return z_flow, theta_flow, hist_train, hist_val, hist_comp_truth, config
+            return z_flow, theta_flow, hist, config
 
         except FileNotFoundError:
             print("Didn't find backup. Run the inference process instead...")
@@ -228,9 +224,8 @@ def train(
 
     parameters = key_vars_ll + key_vars_free_energy + ['p', ]
 
-    hist_val = {k: [] for k in metrics}
-    hist_train = {k: [] for k in metrics}
-    hist_comp_truth = {k: [] for k in parameters}  # Comparison with ground truth
+    hist = {k: {m: [] for m in metrics} for k in ['train', 'val']}
+    hist.update({k: {p: [] for p in parameters} for k in ['comp_truth_train', 'comp_truth_val']})
 
     with tqdm(total=epochs) as pbar:
 
@@ -239,12 +234,14 @@ def train(
             theta_flow.train()
             z_flow.train()
 
-            metric_val = {k: [] for k in metrics}
-            param_val = {k: [] for k in parameters}
+            metric_values = {k: [] for k in metrics}
+            param_values = {k: [] for k in parameters}
 
             for d in training_data:
 
                 optimizer.zero_grad()
+
+                # kwargs_likelihood = {k: v for k, v in d.items() if k != 'i'}
 
                 ll, ll_var = likelihood(
                     z_flow=z_flow,
@@ -261,13 +258,8 @@ def train(
                     n_sample=n_sample,
                     ll=ll,
                     total_n_obs=n_training,
-                    Zu1=ll_var['Zu1'],
-                    Zu2=ll_var['Zu2'],
-                    Zw1=ll_var['Zw1'],
-                    Zw2=ll_var['Zw2'],
-                    ln_q0_Z=ll_var['ln_q0_Z'],
-                    sum_ld_Z=ll_var['sum_ld_Z'],
-                    batch_size=batch_size)
+                    batch_size=batch_size,
+                    **ll_var)
 
                 loss.backward()
                 optimizer.step()
@@ -297,7 +289,7 @@ def train(
                         else:
                             raise ValueError
 
-                        metric_val[k].append(r)
+                        metric_values[k].append(r)
 
                     if truth is not None:
 
@@ -305,7 +297,7 @@ def train(
                             try:
                                 obs = ll_var[k].mean(axis=1)
                                 delta = (obs - truth[k]).abs().mean().item()
-                                param_val[k].append(delta)
+                                param_values[k].append(delta)
                             except Exception as e:
                                 raise e
 
@@ -313,26 +305,28 @@ def train(
 
                             obs = loss_var[k].mean()
                             delta = (obs - truth[k]).abs().item()
-                            param_val[k].append(delta)
+                            param_values[k].append(delta)
 
                         obs = torch.exp(ll_var['log_p']).mean(axis=1)
-                        delta = (obs - truth['p']).abs().mean().item()
-                        param_val['p'].append(delta)
+                        index = d['i']
+                        tr = truth['p'][index]
+                        delta = (obs - tr).abs().mean().item()
+                        param_values['p'].append(delta)
 
             for k in metrics:
-                hist_train[k].append(np.mean(metric_val[k]))
+                hist['train'][k].append(np.mean(metric_values[k]))
 
             if truth is not None:
                 for k in parameters:
-                    hist_comp_truth[k].append(np.mean(param_val[k]))
+                    hist['comp_truth_train'][k].append(np.mean(param_values[k]))
 
-            pbar.set_postfix({'loss': hist_train['free_energy'][-1]})
+            pbar.set_postfix({'loss': hist['train']['free_energy'][-1]})
             pbar.update()
 
             z_flow.eval()
             theta_flow.eval()
 
-            metric_val = {k: [] for k in metrics}
+            metric_values = {k: [] for k in metrics}
 
             with torch.no_grad():
 
@@ -353,8 +347,8 @@ def train(
                         elif k == 'accuracy':
                             y_pred = (p_y > 0.5).float()
                             r = (y == y_pred).sum() / y.size(0)
-                        elif k == 'elbo':
-                            r = free_energy(
+                        elif k == 'free_energy':
+                            fe, fe_var = free_energy(
                                 theta_flow=theta_flow,
                                 n_sample=n_sample,
                                 ll=ll,
@@ -362,10 +356,22 @@ def train(
                                 **elbo_kwargs,
                                 total_n_obs=n_validation,
                                 batch_size=batch_size)
+                            r = fe.item()
                         else:
-                            raise ValueError()
+                            raise ValueError(f'Metric not recognized: {k}')
 
-                        metric_val[k].append(r)
+                        metric_values[k].append(r)
+
+            for k in metrics:
+                v = metric_values[k]
+                if len(v):
+                    hist['val'][k].append(np.mean(v))
+
+            if truth is not None:
+                for k in parameters:
+                    v = param_values[k]
+                    if len(v):
+                        hist['comp_truth_train'][k].append(np.mean(v))
 
     config = dict(
         batch_size=batch_size,
@@ -385,14 +391,12 @@ def train(
 
     z_flow.save(z_bkp_file)
     theta_flow.save(theta_bkp_file)
-    torch.save(f=hist_train_bkp_file, obj=hist_train)
-    torch.save(f=hist_val_bkp_file, obj=hist_val)
+    torch.save(f=hist_bkp_file, obj=hist)
     torch.save(f=config_bkp_file, obj=config)
 
     if truth is not None:
         torch.save(obj=truth, f=truth_bkp_file)
-        torch.save(obj=hist_comp_truth, f=hist_comp_truth_bkp_file)
 
-    return z_flow, theta_flow, hist_train, hist_val, hist_comp_truth, config
+    return z_flow, theta_flow, hist, config
 
 
