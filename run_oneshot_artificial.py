@@ -55,9 +55,6 @@ def make_fig(theta_flow, hist, truth, fig_folder):
         hist_train=hist['comp_truth_train'],
         hist_val=hist['comp_truth_val'])
 
-    print(hist['comp_truth_train'])
-    print(hist['comp_truth_val'])
-
 
 def main():
 
@@ -65,10 +62,31 @@ def main():
                               seed=SEED_DATA_GENERATION,
                               use_torch_dataset=True)
 
+    # bkp_name = "run_oneshot_artificial"
+
+    # z_flow, theta_flow, hist, config = train(
+    #     epochs=5000,
+    #     initial_lr=0.01,
+    #     dataset=dataset,
+    #     batch_size=len(dataset),
+    #     training_split=1.0,
+    #     truth=truth,
+    #     bkp_folder="bkp",
+    #     bkp_name=bkp_name,
+    #     load_if_exists=False)
+    #
+    # make_fig(
+    #     fig_folder=f"fig/{bkp_name}",
+    #     theta_flow=theta_flow,
+    #     hist=hist,
+    #     truth=truth)
+
     for batch_size, learning_rate in (len(dataset), 0.01), (64, 10e-8), (int(0.10*len(dataset)), 10e-8):
-        for training_split in 1.0, 0.9, 0.75:
+        for training_split in (0.9, ):
 
             bkp_name = f"run_oneshot_artificial_bs{batch_size}_ts{int(training_split*100)}"
+
+            print(f"run {bkp_name}")
 
             z_flow, theta_flow, hist, config = train(
                 epochs=5000,

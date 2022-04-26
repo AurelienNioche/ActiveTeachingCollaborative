@@ -42,21 +42,24 @@ def likelihood(
     # Comp. log-likelihood of observations
     ll = torch.distributions.Bernoulli(
         probs=torch.exp(log_p)
-    ).log_prob(y).mean(axis=1)  # Mean over samples // shape: batch_size
+    ).log_prob(y)
+    ll_sum = ll.sum(axis=0)  # Sum over observations (final shape: n_sample)
 
-    return ll, {'Zu1': Zu1,
-                'Zu2': Zu2,
-                'Zw1': Zw1,
-                'Zw2': Zw2,
-                'log_p': log_p,
-                'ln_q0_Z': ln_q0_Z,
-                'sum_ld_Z': sum_ld_Z}
+    return ll_sum, {
+        'll': ll.mean(axis=1),  # Mean over samples (final shape: n_obs)
+        'Zu1': Zu1,
+        'Zu2': Zu2,
+        'Zw1': Zw1,
+        'Zw2': Zw2,
+        'log_p': log_p,
+        'ln_q0_Z': ln_q0_Z,
+        'sum_ld_Z': sum_ld_Z}
 
 
 def free_energy(
         theta_flow,
         n_sample,
-        ll,
+        ll_sum,
         Zu1,
         Zu2,
         Zw1,
@@ -85,21 +88,21 @@ def free_energy(
     sg_w2 = torch.exp(0.5 * log_var_w2)
 
     # Comp. likelihood Z-values given population parameterization for first parameter
-    ll_Zu1 = dist.Normal(half_mu1, sg_u1).log_prob(Zu1).mean(axis=1)  # mean over sample // shape: N user
-    ll_Zw1 = dist.Normal(half_mu1, sg_w1).log_prob(Zw1).mean(axis=1)  # mean over sample // shape: N word
+    ll_Zu1 = dist.Normal(half_mu1, sg_u1).log_prob(Zu1).sum(axis=0)  # .mean(axis=1)  # mean over sample // shape: N user
+    ll_Zw1 = dist.Normal(half_mu1, sg_w1).log_prob(Zw1).sum(axis=0)  # .mean(axis=1)  # mean over sample // shape: N word
 
     # Comp. likelihood Z-values given population parameterization for second parameter
-    ll_Zu2 = dist.Normal(half_mu2, sg_u2).log_prob(Zu2).mean(axis=1)
-    ll_Zw2 = dist.Normal(half_mu2, sg_w2).log_prob(Zw2).mean(axis=1)
+    ll_Zu2 = dist.Normal(half_mu2, sg_u2).log_prob(Zu2).sum(axis=0)  # .mean(axis=1)
+    ll_Zw2 = dist.Normal(half_mu2, sg_w2).log_prob(Zw2).sum(axis=0)  # .mean(axis=1)
 
     # Add all the loss terms and compute average (= expectation estimate)
-    ln_q0 = ln_q0_θ.sum() + ln_q0_Z.sum()  # log q0
-    sum_ln_det = sum_ld_θ.sum() + sum_ld_Z.sum()  # sum log determinant
-    lls = ll.sum() + ll_Zu1.sum() + ll_Zu2.sum() + ll_Zw1.sum() + ll_Zw2.sum()
+    ln_q0 = ln_q0_θ + ln_q0_Z  # log q0
+    sum_ln_det = sum_ld_θ + sum_ld_Z  # sum log determinant
+    lls = ll_sum + ll_Zu1 + ll_Zu2 + ll_Zw1 + ll_Zw2
 
     batch_ratio = total_n_obs / batch_size
     # beta = min(batch_ratio, 0.01 + batch_ratio*epoch/total_n_epochs)
-    loss = (ln_q0 - sum_ln_det - batch_ratio*lls) / total_n_obs
+    loss = (ln_q0 - sum_ln_det - batch_ratio*lls).sum() / (n_sample * total_n_obs)
 
     # Return - ELBO
     return loss, {
@@ -243,20 +246,17 @@ def train(
 
                 # kwargs_likelihood = {k: v for k, v in d.items() if k != 'i'}
 
-                ll, ll_var = likelihood(
+                ll_sum, ll_var = likelihood(
                     z_flow=z_flow,
                     n_sample=n_sample,
                     n_u=n_u,
                     n_w=n_w,
                     **d)
 
-                p_y = torch.exp(ll)
-                y = d['y'].squeeze()
-
                 loss, loss_var = free_energy(
                     theta_flow=theta_flow,
                     n_sample=n_sample,
-                    ll=ll,
+                    ll_sum=ll_sum,
                     total_n_obs=n_training,
                     batch_size=batch_size,
                     **ll_var)
@@ -276,6 +276,11 @@ def train(
 
                 z_flow.eval()
                 theta_flow.eval()
+
+                ll = ll_var["ll"]
+
+                p_y = torch.exp(ll)
+                y = d['y'].squeeze()
 
                 with torch.no_grad():
                     for k in metrics:
@@ -333,12 +338,14 @@ def train(
 
                 for d in validation_data:
 
-                    ll, ll_var = likelihood(
+                    ll_sum, ll_var = likelihood(
                         z_flow=z_flow,
                         n_sample=n_sample,
                         n_u=n_u,
                         n_w=n_w,
                         **d)
+
+                    ll = ll_var["ll"]
                     p_y = torch.exp(ll)
                     y = d['y'].squeeze()
 
@@ -352,7 +359,7 @@ def train(
                             fe, fe_var = free_energy(
                                 theta_flow=theta_flow,
                                 n_sample=n_sample,
-                                ll=ll,
+                                ll_sum=ll_sum,
                                 **ll_var,
                                 total_n_obs=n_validation,
                                 batch_size=batch_size)
