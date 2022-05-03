@@ -81,10 +81,11 @@ def main():
     #     hist=hist,
     #     truth=truth)
 
-    for batch_size, learning_rate in (len(dataset), 0.01), (64, 10e-8), (int(0.10*len(dataset)), 10e-8):
+    for batch_size, learning_rate in (int(0.10*len(dataset)), 10e-5), (64, 1e-12), :
         for training_split in (0.9, ):
 
-            bkp_name = f"run_oneshot_artificial_bs{batch_size}_ts{int(training_split*100)}"
+            bkp_name = f"run_oneshot_artificial_bs{batch_size}_ts{int(training_split*100)}_" \
+                       f"lr{str(learning_rate).replace('.', '_')}"
 
             print(f"run {bkp_name}")
 
@@ -97,7 +98,7 @@ def main():
                 truth=truth,
                 bkp_folder="bkp",
                 bkp_name=bkp_name,
-                load_if_exists=False)
+                load_if_exists=True)
 
             make_fig(
                 fig_folder=f"fig/{bkp_name}",
